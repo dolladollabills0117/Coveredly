@@ -2,11 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { type ReactNode } from 'react';
 import {
-  ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View,
   type StyleProp, type TextInputProps, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, fonts, radius, shadow, space } from '../lib/theme';
+import { PolkaDots } from './PolkaDots';
 
 export const tap = () => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); };
 
@@ -15,6 +16,7 @@ export function Screen({ children, scroll = true, style, edges = ['top'] }: {
 }) {
   return (
     <SafeAreaView edges={edges} style={{ flex: 1, backgroundColor: colors.peach }}>
+      <PolkaDots />
       {scroll ? (
         <ScrollView contentContainerStyle={[{ padding: space(5), paddingBottom: space(12) }, style]} showsVerticalScrollIndicator={false}>
           {children}
@@ -83,10 +85,10 @@ export function Pill({ label, tone = 'neutral', icon }: { label: string; tone?: 
   );
 }
 
-export function Field({ label, ...props }: TextInputProps & { label: string }) {
+export function Field({ label, labelColor, ...props }: TextInputProps & { label: string; labelColor?: string }) {
   return (
     <View style={{ marginBottom: space(4) }}>
-      <Text style={s.label}>{label}</Text>
+      <Text style={[s.label, labelColor ? { color: labelColor } : null]}>{label}</Text>
       <TextInput placeholderTextColor="#A8998B" {...props} style={[s.input, props.multiline && { minHeight: 96, textAlignVertical: 'top' }, props.style]} />
     </View>
   );
@@ -127,6 +129,12 @@ export function Empty({ icon, title, body, children }: { icon: keyof typeof Ioni
       {children}
     </Card>
   );
+}
+
+/** Brand-colored on/off switch (same look on iOS, Android and web). */
+export function Toggle({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
+  return <Switch value={value} onValueChange={(v) => { tap(); onValueChange(v); }} trackColor={{ true: colors.orange, false: colors.line }}
+    thumbColor={colors.white} ios_backgroundColor={colors.line} {...({ activeThumbColor: colors.white } as object)} />;
 }
 
 export const Divider = () => <View style={{ height: 1, backgroundColor: colors.line, marginVertical: space(4) }} />;

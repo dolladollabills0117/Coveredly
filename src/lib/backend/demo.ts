@@ -10,12 +10,13 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { rankAgents, type AgentProfile } from '../../../supabase/functions/_shared/matching';
+import { planById, type PlanId } from '../../config/plans';
 import type {
-  Activity, ActivityType, AdminAgent, AgentQuiz, AppNotification, Backend, LeadRating, LeadReport, Match,
+  Activity, ActivityType, AdminAgent, AgentQuiz, AppNotification, Backend, FoundingRequest, LeadRating, LeadReport, Match,
   Message, MilestoneKey, PendingMatch, PolicyholderQuiz, Review, Role, User,
 } from '../types';
 
-type AgentRow = AgentProfile & { userId: string; email: string; license: string; phone?: string };
+type AgentRow = AgentProfile & { userId: string; email: string; license: string; phone?: string; plan?: PlanId | null; planStatus?: 'active' | 'pending' | null };
 interface DB {
   users: (User & { password: string })[];
   agents: AgentRow[];
@@ -27,10 +28,11 @@ interface DB {
   messages: Message[];
   activity: Activity[];
   notifications: AppNotification[];
+  founding: FoundingRequest[];
   session: string | null;
 }
 
-const KEY = 'coveredly-demo-v1';
+const KEY = 'coveredly-demo-v2';
 const AUTO_APPROVE = false; // mirrors the sheet: admin approves every match by hand
 const now = () => new Date().toISOString();
 const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
@@ -53,10 +55,10 @@ function seed(): DB {
   const agents: AgentRow[] = [
     { ...base, id: 'u-ag1', userId: 'u-ag1', name: 'Maria Delgado', email: 'agent@demo.com', license: '1234567', phone: '(973) 555-0141',
       counties: ['Essex', 'Hudson'], contactMethod: 'Text or chat 💬', languages: ['English', 'Spanish'], explains: 'With examples and stories',
-      advises: 'I present 2 or 3 options', speed: 'Within an hour', bestLeadType: 'Ready to buy now', lines: ['Auto', 'Home, renters or condo', 'Umbrella'], matchedThisMonth: 3 },
+      advises: 'I present 2 or 3 options', speed: 'Within an hour', bestLeadType: 'Ready to buy now', lines: ['Auto', 'Home, renters or condo', 'Umbrella'], matchedThisMonth: 3, plan: 'founding', planStatus: 'active' },
     { ...base, id: 'u-ag2', userId: 'u-ag2', name: 'Jordan Park', email: 'jordan@demo.com', license: '2345678', counties: ['Bergen'],
       contactMethod: 'Phone call 📞', languages: ['English', 'Korean'], explains: 'Short and simple', advises: 'I recommend the best fit',
-      speed: 'Same day', bestLeadType: 'Renewing soon', lines: ['Auto', 'Home, renters or condo', 'Life'], matchedThisMonth: 1 },
+      speed: 'Same day', bestLeadType: 'Renewing soon', lines: ['Auto', 'Home, renters or condo', 'Life'], matchedThisMonth: 1, plan: 'dialogue', planStatus: 'active' },
     { ...base, id: 'u-ag3', userId: 'u-ag3', name: 'Priya Shah', email: 'priya@demo.com', license: '3456789', verified: false, counties: ['Middlesex'],
       contactMethod: 'Email 📧', languages: ['English', 'Hindi'], explains: 'Every detail', advises: 'I lay it all out and they choose',
       speed: 'Next business day', bestLeadType: 'Still shopping around', lines: ['Life', 'Umbrella'], matchedThisMonth: 0 },
@@ -97,6 +99,7 @@ function seed(): DB {
       { id: 'a3', type: 'match_suggested', matchId: 'm4', actorName: 'System', text: 'New policyholder Chris Moreno is waiting for match approval', createdAt: ago(1) },
     ],
     notifications: [],
+    founding: [{ id: 'f1', agentId: 'u-ag3', agentName: 'Priya Shah', agentEmail: 'priya@demo.com', status: 'requested', createdAt: ago(2) }],
     session: null,
   };
 }
@@ -125,6 +128,12 @@ const me = async () => {
   if (!u) throw new Error('Not signed in');
   return u;
 };
+function publicUser(d: DB, u: User & { password: string }): User {
+  const { password, ...rest } = u;
+  if (u.role !== 'agent') return rest;
+  const a = d.agents.find((x) => x.userId === u.id);
+  return { ...rest, plan: a?.plan && a.planStatus ? { id: a.plan, status: a.planStatus } : null };
+}
 const nameOf = (d: DB, id: string) => d.users.find((u) => u.id === id)?.fullName ?? 'Someone';
 
 function log(d: DB, type: ActivityType, actorName: string, text: string, matchId?: string) {
@@ -165,6 +174,8 @@ function agentProfiles(d: DB): AgentProfile[] {
   const month = new Date().toISOString().slice(0, 7);
   return d.agents.map((a) => ({
     ...a,
+    subscribed: a.planStatus === 'active',
+    monthlyCap: planById(a.plan)?.leads ?? a.monthlyCap,
     matchedThisMonth: Math.max(a.matchedThisMonth,
       d.matches.filter((m) => m.agentId === a.userId && m.status !== 'pending_approval' && m.status !== 'replaced' && m.createdAt.startsWith(month)).length),
   }));
@@ -190,9 +201,7 @@ export const demoBackend: Backend = {
   async getUser() {
     const d = await load();
     const u = d.users.find((x) => x.id === d.session);
-    if (!u) return null;
-    const { password, ...rest } = u;
-    return rest;
+    return u ? publicUser(d, u) : null;
   },
   async signIn(email) {
     const d = await load();
@@ -200,8 +209,7 @@ export const demoBackend: Backend = {
     if (!u) throw new Error('No account with that email. Tap "Create account" instead.');
     d.session = u.id;
     await save();
-    const { password, ...rest } = u;
-    return rest;
+    return publicUser(d, u);
   },
   async signUp(email, password, role, fullName) {
     const d = await load();
@@ -210,8 +218,7 @@ export const demoBackend: Backend = {
     d.users.push(u);
     d.session = u.id;
     await save();
-    const { password: _p, ...rest } = u;
-    return rest;
+    return publicUser(d, u);
   },
   async signOut() {
     const d = await load();
@@ -234,8 +241,10 @@ export const demoBackend: Backend = {
 
   async saveAgentQuiz(q) {
     const d = await load(); const u = await me();
+    const prev = d.agents.find((a) => a.userId === u.id);
     d.agents = d.agents.filter((a) => a.userId !== u.id);
     d.agents.push({
+      plan: prev?.plan ?? null, planStatus: prev?.planStatus ?? null,
       id: u.id, userId: u.id, name: q.fullName, email: u.email, license: q.license, phone: q.phone, verified: false, monthlyCap: 6, matchedThisMonth: 0,
       licensedStates: q.licensedStates, counties: q.counties, contactMethod: q.contactMethod, languages: q.languages, explains: q.explains,
       advises: q.advises, speed: q.speed, bestLeadType: q.bestLeadType, lines: q.lines,
@@ -422,6 +431,7 @@ export const demoBackend: Backend = {
       const row = d.agents.find((x) => x.id === a.id)!;
       return {
         id: a.id, fullName: a.name, email: row.email, license: row.license, verified: a.verified, matchedThisMonth: a.matchedThisMonth,
+        plan: row.plan && row.planStatus === 'active' ? planById(row.plan)?.name : null,
         monthlyCap: a.monthlyCap, closed: d.matches.filter((m) => m.agentId === a.id && m.milestones.sold).length,
       };
     });
@@ -430,6 +440,52 @@ export const demoBackend: Backend = {
     const d = await load();
     d.agents.find((x) => x.id === agentId)!.verified = verified;
     await save();
+  },
+
+  async startCheckout(planId) {
+    const d = await load(); const u = await me();
+    const a = d.agents.find((x) => x.userId === u.id)!;
+    if (planId === 'founding' && !d.founding.some((f) => f.agentId === u.id && f.status === 'redeemed'))
+      throw new Error('Validate your founding agent code first.');
+    const plan = planById(planId)!;
+    a.plan = planId; a.planStatus = 'active'; a.monthlyCap = plan.leads;
+    log(d, 'match_approved', u.fullName, `${u.fullName} started the ${plan.name} plan ($${plan.price}/mo, ${plan.leads} leads)`);
+    await save();
+    return { activated: true };
+  },
+  async requestFounding() {
+    const d = await load(); const u = await me();
+    if (d.founding.some((f) => f.agentId === u.id)) return;
+    d.founding.unshift({ id: uid(), agentId: u.id, agentName: u.fullName, agentEmail: u.email, status: 'requested', createdAt: now() });
+    log(d, 'match_suggested', u.fullName, `${u.fullName} says they're a founding agent. Approve them in Agents to send a code.`);
+    d.users.filter((x) => x.role === 'admin').forEach((ad) =>
+      notify(d, ad.id, { kind: 'milestone', title: 'Founding agent request', body: `${u.fullName} is asking for founding agent pricing.` }));
+    await save();
+  },
+  async getMyFoundingRequest() {
+    const d = await load(); const u = await me();
+    return d.founding.find((f) => f.agentId === u.id) ?? null;
+  },
+  async redeemFoundingCode(code) {
+    const d = await load(); const u = await me();
+    const f = d.founding.find((x) => x.agentId === u.id && x.status !== 'requested');
+    if (!f || f.code?.toUpperCase() !== code.trim().toUpperCase()) throw new Error("That code doesn't match. Check the code we sent you.");
+    f.status = 'redeemed';
+    log(d, 'report_resolved', u.fullName, `${u.fullName} validated their founding agent code`);
+    await save();
+  },
+  async listFoundingRequests() {
+    return (await load()).founding;
+  },
+  async approveFounding(id) {
+    const d = await load();
+    const f = d.founding.find((x) => x.id === id)!;
+    f.code = f.code ?? 'CF-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+    f.status = 'approved';
+    notify(d, f.agentId, { kind: 'milestone', title: "You're a founding agent 🧡", body: `Your code is ${f.code}. Enter it on the plan screen to lock in $39/month for life.` });
+    log(d, 'match_approved', 'Admin', `You approved ${f.agentName} as a founding agent (code ${f.code})`);
+    await save();
+    return f.code;
   },
 
   subscribe(cb) {

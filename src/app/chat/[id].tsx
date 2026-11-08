@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PolkaDots } from '../../components/PolkaDots';
 import { Body, H3, Small } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/backend';
@@ -28,6 +29,7 @@ export default function Chat() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.peach }} edges={['top', 'bottom']}>
+      <PolkaDots />
       <View style={st.header}>
         <Pressable onPress={() => router.back()} hitSlop={12}><Ionicons name="chevron-back" size={26} color={colors.ink} /></Pressable>
         <View style={{ flex: 1 }}>

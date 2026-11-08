@@ -64,6 +64,9 @@ export default function Auth() {
             ? 'Your license number is only used to verify you and is never shared.'
             : 'Your contact info is shared only with the one agent you are matched with, and only once you are matched.'}
         </Small>
+        <Pressable onPress={() => router.push('/privacy')} style={{ alignItems: 'center', marginTop: space(3) }}>
+          <Small style={{ textDecorationLine: 'underline' }}>By continuing you agree to our Privacy Policy</Small>
+        </Pressable>
       </Screen>
     </KeyboardAvoidingView>
   );

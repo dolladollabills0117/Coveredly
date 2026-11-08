@@ -5,7 +5,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
-import type { AgentQuiz, AppNotification, Backend, Match, MilestoneKey, PolicyholderQuiz, Role, User } from '../types';
+import type { FoundingRequest, AgentQuiz, AppNotification, Backend, Match, MilestoneKey, PolicyholderQuiz, Role, User } from '../types';
 
 let sb: SupabaseClient;
 export function supabaseClient() {
@@ -29,9 +29,21 @@ async function uidOrThrow() {
 }
 
 async function profile(id: string): Promise<User | null> {
-  const { data } = await supabaseClient().from('profiles').select('*').eq('id', id).maybeSingle();
-  return data ? { id: data.id, role: data.role, email: data.email, fullName: data.full_name, phone: data.phone ?? undefined, quizDone: data.quiz_done } : null;
+  const s = supabaseClient();
+  const { data } = await s.from('profiles').select('*').eq('id', id).maybeSingle();
+  if (!data) return null;
+  const u: User = { id: data.id, role: data.role, email: data.email, fullName: data.full_name, phone: data.phone ?? undefined, quizDone: data.quiz_done };
+  if (u.role === 'agent') {
+    const { data: a } = await s.from('agents').select('plan, plan_status').eq('user_id', id).maybeSingle();
+    u.plan = a?.plan && (a.plan_status === 'active' || a.plan_status === 'pending') ? { id: a.plan, status: a.plan_status } : null;
+  }
+  return u;
 }
+
+const foundingFromRow = (r: any, p?: any): FoundingRequest => ({
+  id: r.id, agentId: r.agent_id, status: r.status, code: r.code ?? undefined, createdAt: r.created_at,
+  agentName: p?.full_name ?? '', agentEmail: p?.email ?? '',
+});
 
 const phFromRow = (r: any): PolicyholderQuiz => ({
   fullName: '', state: r.state, county: r.county ?? undefined, zip: r.zip ?? undefined, coverage: r.coverage, language: r.language,
@@ -204,17 +216,39 @@ export const supabaseBackend: Backend = {
       const p = (profiles.data ?? []).find((x: any) => x.id === a.user_id);
       const mine = (matches.data ?? []).filter((m: any) => m.agent_id === a.user_id);
       return { id: a.user_id, fullName: p?.full_name ?? '', email: p?.email ?? '', license: a.license, verified: a.verified, monthlyCap: a.monthly_cap,
+        plan: a.plan_status === 'active' ? a.plan : a.plan_status ? `${a.plan} (${a.plan_status})` : null,
         matchedThisMonth: mine.filter((m: any) => m.approved_at?.startsWith(month) && m.status !== 'replaced').length,
         closed: mine.filter((m: any) => m.m_sold).length };
     });
   },
   async setAgentVerified(id, verified) { ok(await supabaseClient().from('agents').update({ verified }).eq('user_id', id)); },
 
+  async startCheckout(plan) {
+    const { data, error } = await supabaseClient().functions.invoke('create-checkout', { body: { plan } });
+    if (error || data?.error) throw new Error(data?.error ?? error?.message);
+    return { url: data.url };
+  },
+  async requestFounding() { ok(await supabaseClient().rpc('request_founding')); },
+  async getMyFoundingRequest() {
+    const id = await uidOrThrow();
+    const { data } = await supabaseClient().from('founding_requests').select('*').eq('agent_id', id).maybeSingle();
+    return data ? foundingFromRow(data) : null;
+  },
+  async redeemFoundingCode(code) { ok(await supabaseClient().rpc('redeem_founding_code', { p_code: code })); },
+  async listFoundingRequests() {
+    const s = supabaseClient();
+    const rows = ok(await s.from('founding_requests').select('*').order('created_at', { ascending: false })) ?? [];
+    const { data: ps } = await s.from('profiles').select('id, full_name, email').in('id', rows.map((r: any) => r.agent_id));
+    return rows.map((r: any) => foundingFromRow(r, (ps ?? []).find((p: any) => p.id === r.agent_id)));
+  },
+  async approveFounding(rid) { return ok(await supabaseClient().rpc('approve_founding', { rid })) as string; },
+
   subscribe(cb) {
     const ch = supabaseClient().channel('coveredly-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, cb)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, cb)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, cb)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agents' }, cb)
       .subscribe();
     const { data } = supabaseClient().auth.onAuthStateChange(() => cb());
     return () => { supabaseClient().removeChannel(ch); data.subscription.unsubscribe(); };

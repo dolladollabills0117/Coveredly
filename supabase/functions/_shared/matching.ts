@@ -46,6 +46,7 @@ export interface AgentProfile {
   id: string;
   name: string;
   verified: boolean; // admin checked the NJ license
+  subscribed?: boolean; // has an active paid plan (false = never matched)
   licensedStates: string[]; // location hard rule
   counties?: string[]; // optional, used only to break ties
   contactMethod: string;
@@ -125,6 +126,7 @@ export function scoreAgent(ph: PolicyholderProfile, ag: AgentProfile, cfg = MATC
 
   const reasons: string[] = [];
   if (!ag.verified) reasons.push('Agent not verified');
+  if (ag.subscribed === false) reasons.push('No active plan');
   if (!(ag.matchedThisMonth < ag.monthlyCap)) reasons.push('Agent is at monthly cap');
   const langOk = ph.language === 'Either one is fine' || has(ag.languages.join(', '), ph.language);
   if (!langOk) reasons.push(`Doesn't speak ${ph.language}`);

@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { CelebrationHost } from '../components/Celebration';
 import { AuthProvider, useAuth } from '../lib/auth';
+import { PrefsProvider } from '../lib/prefs';
 import { registerForPush } from '../lib/push';
 import { colors } from '../lib/theme';
 
@@ -33,9 +34,11 @@ export default function RootLayout() {
   if (!loaded) return null;
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <Shell />
-      </AuthProvider>
+      <PrefsProvider>
+        <AuthProvider>
+          <Shell />
+        </AuthProvider>
+      </PrefsProvider>
     </SafeAreaProvider>
   );
 }

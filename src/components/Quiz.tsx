@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, fonts, radius, space } from '../lib/theme';
+import { PolkaDots } from './PolkaDots';
 import { Body, Button, Eyebrow, Field, H1, Small, tap } from './ui';
 
 export type Question =
@@ -75,6 +76,7 @@ export function Quiz({ eyebrow, questions, onDone, gate }: {
   if (stopped) {
     return (
       <SafeAreaView style={st.wrap}>
+      <PolkaDots />
         <View style={{ flex: 1, justifyContent: 'center', padding: space(6), gap: space(4) }}>
           <H1>{stopped.title}</H1>
           <Body style={{ color: colors.inkSoft }}>{stopped.body}</Body>
@@ -86,6 +88,7 @@ export function Quiz({ eyebrow, questions, onDone, gate }: {
 
   return (
     <SafeAreaView style={st.wrap}>
+      <PolkaDots />
       <View style={st.top}>
         <Pressable onPress={() => i > 0 && animateTo(i - 1)} hitSlop={12} style={{ opacity: i > 0 ? 1 : 0 }}>
           <Ionicons name="chevron-back" size={26} color={colors.ink} />

@@ -9,7 +9,7 @@ export function RoleTabs({ role, tabs }: { role: Role; tabs: { name: string; tit
   const { user } = useAuth();
   if (user === undefined) return null;
   if (!user) return <Redirect href="/" />;
-  if (user.role !== role || (role !== 'admin' && !user.quizDone)) return <Redirect href={homeFor(user)} />;
+  if (user.role !== role || (role !== 'admin' && !user.quizDone) || (role === 'agent' && user.plan?.status !== 'active')) return <Redirect href={homeFor(user)} />;
   return (
     <Tabs screenOptions={{
       headerShown: false,

@@ -1,4 +1,5 @@
 import type { AgentProfile, PolicyholderProfile } from '../../supabase/functions/_shared/matching';
+import type { PlanId } from '../config/plans';
 
 export type Role = 'agent' | 'policyholder' | 'admin';
 
@@ -9,6 +10,18 @@ export interface User {
   fullName: string;
   phone?: string;
   quizDone: boolean;
+  /** Agents only: their subscription. Agents without an active plan are sent to the plan screen. */
+  plan?: { id: PlanId; status: 'active' | 'pending' } | null;
+}
+
+export interface FoundingRequest {
+  id: string;
+  agentId: string;
+  agentName: string;
+  agentEmail: string;
+  status: 'requested' | 'approved' | 'redeemed';
+  code?: string; // visible to admin and (after approval) to the agent
+  createdAt: string;
 }
 
 /** The four milestones a match must hit to become "Established". */
@@ -120,6 +133,7 @@ export interface AdminAgent {
   matchedThisMonth: number;
   monthlyCap: number;
   closed: number;
+  plan?: string | null; // plan name + status, e.g. "Dialogue"
 }
 
 /** Everything the screens need. Implemented by the demo store and by Supabase. */
@@ -160,6 +174,15 @@ export interface Backend {
   listActivity(): Promise<Activity[]>;
   listAgents(): Promise<AdminAgent[]>;
   setAgentVerified(agentId: string, verified: boolean): Promise<void>;
+
+  // Agent plans & payment
+  /** Starts checkout. Demo mode activates instantly; production returns a Stripe Checkout URL. */
+  startCheckout(plan: PlanId): Promise<{ url?: string; activated?: boolean }>;
+  requestFounding(): Promise<void>;
+  getMyFoundingRequest(): Promise<FoundingRequest | null>;
+  redeemFoundingCode(code: string): Promise<void>;
+  listFoundingRequests(): Promise<FoundingRequest[]>;
+  approveFounding(requestId: string): Promise<string>; // returns the code
 
   /** Fires whenever data changes (realtime in Supabase, local in demo). Returns unsubscribe. */
   subscribe(cb: () => void): () => void;

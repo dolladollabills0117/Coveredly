@@ -18,6 +18,7 @@ assert.equal(scoreAgent({ ...ph, mattersMost: 'Best price' }, base).score, 58.3)
 assert.equal(scoreAgent(ph, { ...base, languages: ['English'] }).score, -1);
 assert.equal(scoreAgent(ph, { ...base, verified: false }).score, -1);
 assert.equal(scoreAgent(ph, { ...base, matchedThisMonth: 6 }).score, -1);
+assert.equal(scoreAgent(ph, { ...base, subscribed: false }).score, -1);
 assert.equal(scoreAgent(ph, { ...base, lines: ['Life'] }).score, -1);
 assert.equal(scoreAgent(ph, { ...base, licensedStates: ['New York'] }).score, -1);
 assert.equal(scoreAgent({ ...ph, language: 'Either one is fine' }, { ...base, languages: ['English'] }).score, 57.5);
@@ -27,4 +28,4 @@ const perfect = { ...base, id: 'p', contactMethod: 'Text or chat 💬', explains
 assert.equal(scoreAgent(ph, perfect).score, 100);
 assert.equal(suggestAgent(ph, [base, perfect])?.agentId, 'p');
 assert.equal(suggestAgent(ph, [{ ...base, verified: false }]), null);
-console.log('✓ matching formula matches the Google Sheet (10 checks)');
+console.log('✓ matching formula matches the Google Sheet (11 checks)');

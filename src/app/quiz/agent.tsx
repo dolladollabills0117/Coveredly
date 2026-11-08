@@ -18,7 +18,7 @@ export default function AgentQuiz() {
           bestLeadType: a.bestLeadType as string, lines: a.lines as string[],
         });
         await refresh();
-        router.replace('/agent');
+        router.replace('/plan');
       }}
     />
   );

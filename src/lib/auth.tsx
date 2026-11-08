@@ -30,5 +30,6 @@ export const useAuth = () => useContext(Ctx);
 export function homeFor(u: User) {
   if (u.role === 'admin') return '/admin' as const;
   if (!u.quizDone) return u.role === 'agent' ? ('/quiz/agent' as const) : ('/quiz/policyholder' as const);
+  if (u.role === 'agent' && u.plan?.status !== 'active') return '/plan' as const;
   return u.role === 'agent' ? ('/agent' as const) : ('/policyholder' as const);
 }

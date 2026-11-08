@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
   ]);
   const nameById = new Map((names ?? []).map((n) => [n.id, n.full_name]));
   const profiles: AgentProfile[] = (agents ?? []).map((a) => ({
-    id: a.user_id, name: nameById.get(a.user_id) ?? '', verified: a.verified, licensedStates: a.licensed_states, counties: a.counties,
+    id: a.user_id, name: nameById.get(a.user_id) ?? '', verified: a.verified, subscribed: a.plan_status === 'active', licensedStates: a.licensed_states, counties: a.counties,
     contactMethod: a.contact_method, languages: a.languages, explains: a.explains, advises: a.advises, speed: a.speed,
     bestLeadType: a.best_lead_type, lines: a.lines, monthlyCap: a.monthly_cap,
     matchedThisMonth: (counts ?? []).filter((c) => c.agent_id === a.user_id).length,
