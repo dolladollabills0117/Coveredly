@@ -1,4 +1,4 @@
-import type { AgentProfile, PolicyholderProfile } from '../../supabase/functions/_shared/matching';
+import type { AgentProfile, FitItem, PolicyholderProfile } from '../../supabase/functions/_shared/matching';
 import type { PlanId } from '../config/plans';
 
 export type Role = 'agent' | 'policyholder' | 'admin';
@@ -33,7 +33,15 @@ export const MILESTONES = [
 ] as const;
 export type MilestoneKey = (typeof MILESTONES)[number]['key'];
 
-export type MatchStatus = 'pending_approval' | 'active' | 'established' | 'reported' | 'replaced';
+/**
+ * low_fit  = best match is under the threshold; policyholder is choosing (match anyway / wait)
+ * waiting  = policyholder chose to wait in the queue for a better match
+ */
+export type MatchStatus = 'low_fit' | 'waiting' | 'pending_approval' | 'active' | 'established' | 'reported' | 'replaced';
+/** Statuses where the agent knows about the match (and contact info is shared). */
+export const AGENT_VISIBLE: MatchStatus[] = ['active', 'established', 'reported', 'replaced'];
+/** Statuses that count as the policyholder's current match / place in line. */
+export const OPEN_FOR_POLICYHOLDER: MatchStatus[] = ['low_fit', 'waiting', 'pending_approval', 'active', 'established'];
 
 export interface Match {
   id: string;
@@ -46,6 +54,8 @@ export interface Match {
   contactedAt?: string;
   milestones: Partial<Record<MilestoneKey, string>>; // ISO timestamps
   establishedAt?: string;
+  /** What fits and what doesn't, in plain language (no agent identity). */
+  fit?: FitItem[];
   // Joined data (only what each side is allowed to see)
   policyholder?: { fullName: string; email?: string; phone?: string; quiz: PolicyholderQuiz };
   agent?: { fullName: string; email?: string; phone?: string; contactMethod: string; languages: string[] };
@@ -119,6 +129,8 @@ export type PolicyholderQuiz = PolicyholderProfile & { fullName: string; phone?:
 
 export interface PendingMatch {
   match: Match;
+  /** approval = ready for you; deciding = policyholder choosing; waiting = in the queue for a better match */
+  queue: 'approval' | 'deciding' | 'waiting';
   policyholderName: string;
   suggestedAgentName: string | null;
   candidates: { agentId: string; name: string; score: number; reasons: string[] }[];
@@ -159,6 +171,11 @@ export interface Backend {
   getReport(matchId: string): Promise<LeadReport | null>;
   submitReview(matchId: string, r: Omit<Review, 'matchId' | 'createdAt'>): Promise<void>;
   requestMatch(): Promise<void>;
+  /** Low-fit choices: go ahead with the best available agent, or wait in the queue. */
+  acceptLowFit(matchId: string): Promise<void>;
+  waitForBetter(matchId: string): Promise<void>;
+  /** Re-run the formula now. Returns the new best score. */
+  recheckMatch(matchId: string): Promise<number>;
 
   listMessages(matchId: string): Promise<Message[]>;
   sendMessage(matchId: string, body: string): Promise<void>;

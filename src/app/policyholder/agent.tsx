@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { LowFitCard } from '../../components/LowFitCard';
 import { MatchCTA } from '../../components/MatchCTA';
 import { MilestoneTimeline } from '../../components/Milestones';
 import { Sheet } from '../../components/Sheet';
@@ -15,6 +16,15 @@ export default function MyAgent() {
   const [reviewOpen, setReviewOpen] = useState(false);
 
   if (!loaded) return <Screen><Body>Loading…</Body></Screen>;
+  if (match && (match.status === 'low_fit' || match.status === 'waiting')) {
+    return (
+      <Screen>
+        <Eyebrow>My agent</Eyebrow>
+        <H1 style={{ marginTop: 4, marginBottom: space(6) }}>Almost there</H1>
+        <LowFitCard match={match} />
+      </Screen>
+    );
+  }
   if (!match || match.status === 'pending_approval') {
     return (
       <Screen>

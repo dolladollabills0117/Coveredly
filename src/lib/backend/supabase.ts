@@ -68,11 +68,17 @@ async function hydrate(rows: any[]): Promise<Match[]> {
     (['call', 'quote', 'sold', 'review'] as MilestoneKey[]).forEach((k) => { if (r['m_' + k]) milestones[k] = r['m_' + k]; });
     return {
       id: r.id, policyholderId: r.policyholder_id, agentId: r.agent_id, score: Number(r.score), matchedBy: r.matched_by, status: r.status,
-      createdAt: r.approved_at ?? r.created_at, contactedAt: r.contacted_at ?? undefined, establishedAt: r.established_at ?? undefined, milestones,
+      createdAt: r.approved_at ?? r.created_at, contactedAt: r.contacted_at ?? undefined, establishedAt: r.established_at ?? undefined, milestones, fit: r.fit ?? undefined,
       policyholder: pp && ph ? { fullName: pp.full_name, email: pp.email, phone: pp.phone ?? undefined, quiz: { ...phFromRow(ph), fullName: pp.full_name } } : undefined,
       agent: ap ? { fullName: ap.full_name, email: ap.email, phone: ap.phone ?? undefined, contactMethod: ag?.contact_method ?? '', languages: ag?.languages ?? [] } : undefined,
     };
   });
+}
+
+async function invokeMatch(body: Record<string, unknown>) {
+  const { data, error } = await supabaseClient().functions.invoke('match-policyholder', { body });
+  if (error || data?.error) throw new Error(data?.error ?? error?.message);
+  return data;
 }
 
 export const supabaseBackend: Backend = {
@@ -128,9 +134,11 @@ export const supabaseBackend: Backend = {
     return p ? { ...phFromRow(p), fullName: me?.fullName ?? '' } : null;
   },
   async requestMatch() {
-    const { error } = await supabaseClient().functions.invoke('match-policyholder', { body: {} });
-    if (error) throw new Error(error.message);
+    await invokeMatch({ action: 'request' });
   },
+  async acceptLowFit(matchId) { await invokeMatch({ action: 'accept', matchId }); },
+  async waitForBetter(mid) { ok(await supabaseClient().rpc('wait_for_better', { mid })); },
+  async recheckMatch(matchId) { return (await invokeMatch({ action: 'recheck', matchId })).score ?? -1; },
 
   async listMyMatches() {
     const s = supabaseClient(); const id = await uidOrThrow();
@@ -171,13 +179,15 @@ export const supabaseBackend: Backend = {
 
   async listPendingMatches() {
     const s = supabaseClient();
-    const rows = ok(await s.from('matches').select('*').eq('status', 'pending_approval').order('created_at'));
-    const matches = await hydrate(rows ?? []);
+    const order: Record<string, number> = { pending_approval: 0, low_fit: 1, waiting: 2 };
+    const rows = ok(await s.from('matches').select('*').in('status', Object.keys(order)).order('created_at'));
+    const matches = (await hydrate(rows ?? [])).sort((a, b) => order[a.status] - order[b.status]);
     return Promise.all(matches.map(async (m) => {
-      const { data } = await s.functions.invoke('match-policyholder', { body: { policyholderId: m.policyholderId, rankOnly: true } });
+      const { data } = await s.functions.invoke('match-policyholder', { body: { action: 'rank', policyholderId: m.policyholderId } });
       const ranked: any[] = data?.ranked ?? [];
       const top = ranked[0]?.score >= 0 ? ranked[0] : null;
       return {
+        queue: m.status === 'pending_approval' ? 'approval' as const : m.status === 'low_fit' ? 'deciding' as const : 'waiting' as const,
         match: m, policyholderName: m.policyholder?.fullName ?? '', suggestedAgentName: top?.name ?? null,
         candidates: ranked.map((r) => ({ agentId: r.agentId, name: r.name, score: r.score, reasons: r.reasons })),
       };
@@ -186,7 +196,7 @@ export const supabaseBackend: Backend = {
   async approveMatch(mid, agentId) {
     const s = supabaseClient();
     const { data } = await s.functions.invoke('match-policyholder', {
-      body: { policyholderId: (await this.getMatch(mid))?.policyholderId, rankOnly: true },
+      body: { action: 'rank', policyholderId: (await this.getMatch(mid))?.policyholderId },
     });
     const score = (data?.ranked ?? []).find((r: any) => r.agentId === agentId)?.score ?? -1;
     ok(await s.rpc('approve_match', { mid, p_agent: agentId, p_score: score }));
@@ -221,7 +231,10 @@ export const supabaseBackend: Backend = {
         closed: mine.filter((m: any) => m.m_sold).length };
     });
   },
-  async setAgentVerified(id, verified) { ok(await supabaseClient().from('agents').update({ verified }).eq('user_id', id)); },
+  async setAgentVerified(id, verified) {
+    ok(await supabaseClient().from('agents').update({ verified }).eq('user_id', id));
+    if (verified) await invokeMatch({ action: 'recheckQueue' }).catch(() => {}); // a new agent may help people waiting
+  },
 
   async startCheckout(plan) {
     const { data, error } = await supabaseClient().functions.invoke('create-checkout', { body: { plan } });

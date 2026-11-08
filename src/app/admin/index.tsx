@@ -17,7 +17,7 @@ export default function Approvals() {
       <Eyebrow>Admin</Eyebrow>
       <H1 style={{ marginTop: 4 }}>Match approvals</H1>
       <Small style={{ marginTop: 6, marginBottom: space(6) }}>
-        The formula ranks every agent (hard rules: language, verified license, licensed in their state, under monthly cap, writes a line they need). Contact info is shared only after you approve.
+        Matches under 80% go to the policyholder first: they choose to match anyway or wait in the queue. The formula ranks every agent (hard rules: language, verified license, licensed in their state, under monthly cap, writes a line they need). Contact info is shared only after you approve.
       </Small>
       {data && data.length === 0 && <Empty icon="checkmark-done-outline" title="All caught up" body="New policyholders will show up here as soon as they finish the quiz." />}
       <View style={{ gap: space(4) }}>
@@ -30,6 +30,10 @@ export default function Approvals() {
                 <H3>{p.policyholderName}</H3>
                 <Small>{timeAgo(p.match.createdAt)}</Small>
               </Row>
+              <View style={{ marginTop: 6 }}>
+                <Pill tone={p.queue === 'approval' ? 'green' : 'orange'} icon={p.queue === 'approval' ? 'checkmark-circle' : 'time-outline'}
+                  label={p.queue === 'approval' ? 'Ready for approval' : p.queue === 'deciding' ? 'Under 80%: they are choosing' : 'Waiting for an 80%+ match'} />
+              </View>
               <Small style={{ marginTop: 4 }}>{q?.coverage.join(', ')} · {q?.language} · {q?.contactMethod} · {q?.county} County</Small>
               <View style={{ marginTop: space(4), gap: 8 }}>
                 {p.candidates.map((c) => {
@@ -48,7 +52,7 @@ export default function Approvals() {
                   );
                 })}
               </View>
-              <Button title={choice ? 'Approve match' : 'No eligible agent'} disabled={!choice} loading={busy === p.match.id} style={{ marginTop: space(4) }}
+              <Button title={!choice ? 'No eligible agent' : p.queue === 'approval' ? 'Approve match' : 'Match anyway'} disabled={!choice} loading={busy === p.match.id} style={{ marginTop: space(4) }}
                 onPress={async () => { setBusy(p.match.id); try { await api.approveMatch(p.match.id, choice!); } finally { setBusy(null); } }} />
             </Card>
           );

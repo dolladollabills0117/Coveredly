@@ -28,6 +28,12 @@ Deno.serve(async (req) => {
       const { data: p } = await db.from('profiles').select('full_name').eq('id', agentId).single();
       await db.from('activity').insert({ type: 'match_approved', actor_name: p?.full_name ?? 'Agent', text: `${p?.full_name} started the ${NAMES[plan]} plan` });
       await db.from('notifications').insert({ user_id: agentId, kind: 'milestone', title: "You're all set 🎉", body: `Your ${NAMES[plan]} plan is active. Matched leads are on the way.` });
+      // A newly active agent may be an 80%+ match for someone waiting in the queue.
+      await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/match-policyholder`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'recheckQueue' }),
+      }).catch(() => {});
     }
   }
   if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {

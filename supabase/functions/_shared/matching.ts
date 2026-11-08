@@ -173,3 +173,37 @@ export function suggestAgent(ph: PolicyholderProfile, agents: AgentProfile[], cf
   const top = rankAgents(ph, agents, cfg)[0];
   return top && top.score >= 0 ? top : null;
 }
+
+// ---------- Fit quality ----------
+
+/**
+ * Minimum score for a "good" match. Below this, the policyholder is told their best
+ * match right now is less compatible, and chooses: match anyway, or wait in the queue.
+ */
+export const GOOD_MATCH_THRESHOLD = 80;
+
+export type FitLevel = 'great' | 'partial' | 'miss';
+export interface FitItem { label: string; level: FitLevel }
+
+const FIT_LABELS: Record<string, string> = {
+  coverageFit: 'Writes the coverage you need',
+  contactMethod: 'How you want to be contacted',
+  explainStyle: 'How things get explained',
+  decisionStyle: 'How you like to decide',
+  timingFit: 'Your timing',
+  speed: 'How fast they reply',
+};
+
+/** Plain-language summary of a score (safe to show the policyholder: no agent identity). */
+export function fitSummary(r: ScoreResult, ph: PolicyholderProfile, cfg = MATCHING_CONFIG): FitItem[] {
+  if (!r.breakdown) return [];
+  const w = cfg.weights;
+  const max: Record<string, number> = {
+    coverageFit: w.coverageFit, contactMethod: w.contactMethod, explainStyle: w.explainStyle, decisionStyle: w.decisionStyle,
+    timingFit: w.timingFit, speed: ph.mattersMost === 'Fast answers' ? w.speedIfFastAnswers : w.speedEveryoneElse,
+  };
+  return Object.entries(r.breakdown).map(([k, v]) => ({
+    label: FIT_LABELS[k] ?? k,
+    level: v >= max[k] - 1e-9 ? 'great' : v > 0 ? 'partial' : 'miss',
+  }));
+}

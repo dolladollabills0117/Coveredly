@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
+import { LowFitCard } from '../../components/LowFitCard';
 import { MilestoneDots, progressOf } from '../../components/Milestones';
 import { Body, Card, Eyebrow, H1, H2, H3, IconBubble, Pill, Row, Screen, Small } from '../../components/ui';
 import { POLICY_TYPES } from '../../config/policies';
@@ -53,6 +54,7 @@ export default function PolicyholderHome() {
           </Row>
         </Card>
       )}
+      {(match?.status === 'low_fit' || match?.status === 'waiting') && <LowFitCard match={match} />}
       {match?.status === 'pending_approval' && (
         <Card>
           <Row>

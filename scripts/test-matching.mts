@@ -1,5 +1,5 @@
 // Sanity checks: the TypeScript port must give the same numbers as the Google Sheet formula.
-import { scoreAgent, suggestAgent, type AgentProfile, type PolicyholderProfile } from '../supabase/functions/_shared/matching.ts';
+import { fitSummary, scoreAgent, suggestAgent, type AgentProfile, type PolicyholderProfile } from '../supabase/functions/_shared/matching.ts';
 import assert from 'node:assert/strict';
 
 const ph: PolicyholderProfile = { state: 'New Jersey', county: 'Essex', coverage: ['Auto', 'Renters'], language: 'Spanish',
@@ -28,4 +28,7 @@ const perfect = { ...base, id: 'p', contactMethod: 'Text or chat 💬', explains
 assert.equal(scoreAgent(ph, perfect).score, 100);
 assert.equal(suggestAgent(ph, [base, perfect])?.agentId, 'p');
 assert.equal(suggestAgent(ph, [{ ...base, verified: false }]), null);
-console.log('✓ matching formula matches the Google Sheet (11 checks)');
+const fit = fitSummary(scoreAgent(ph, base), ph);
+assert.deepEqual(fit.map((f) => f.level), ['partial', 'partial', 'partial', 'great', 'partial', 'partial']);
+assert.ok(fitSummary(scoreAgent(ph, perfect), ph).every((f) => f.level === 'great'));
+console.log('✓ matching formula matches the Google Sheet (13 checks)');

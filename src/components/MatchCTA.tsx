@@ -11,6 +11,8 @@ export function MatchCTA() {
   if (!loaded) return null;
   if (match?.status === 'active' || match?.status === 'established')
     return <Button title="Message your agent" icon="chatbubbles" variant="dark" onPress={() => router.push(`/chat/${match.id}`)} />;
+  if (match?.status === 'low_fit' || match?.status === 'waiting')
+    return <Button title="See your match options" icon="options-outline" onPress={() => router.push('/policyholder/agent')} />;
   if (match?.status === 'pending_approval')
     return <Button title="Finding your match…" icon="hourglass-outline" variant="outline" disabled />;
   return (

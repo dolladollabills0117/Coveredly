@@ -9,12 +9,13 @@
  *   any other email         → brand new account (goes through the quiz)
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { rankAgents, type AgentProfile } from '../../../supabase/functions/_shared/matching';
+import { fitSummary, GOOD_MATCH_THRESHOLD, rankAgents, type AgentProfile } from '../../../supabase/functions/_shared/matching';
 import { planById, type PlanId } from '../../config/plans';
 import type {
   Activity, ActivityType, AdminAgent, AgentQuiz, AppNotification, Backend, FoundingRequest, LeadRating, LeadReport, Match,
   Message, MilestoneKey, PendingMatch, PolicyholderQuiz, Review, Role, User,
 } from '../types';
+import { AGENT_VISIBLE, OPEN_FOR_POLICYHOLDER } from '../types';
 
 type AgentRow = AgentProfile & { userId: string; email: string; license: string; phone?: string; plan?: PlanId | null; planStatus?: 'active' | 'pending' | null };
 interface DB {
@@ -32,7 +33,7 @@ interface DB {
   session: string | null;
 }
 
-const KEY = 'coveredly-demo-v2';
+const KEY = 'coveredly-demo-v3';
 const AUTO_APPROVE = false; // mirrors the sheet: admin approves every match by hand
 const now = () => new Date().toISOString();
 const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
@@ -50,6 +51,7 @@ function seed(): DB {
     mk('u-ph2', 'policyholder', 'sam@demo.com', 'Sam Okafor'),
     mk('u-ph3', 'policyholder', 'dana@demo.com', 'Dana Lee'),
     mk('u-ph4', 'policyholder', 'chris@demo.com', 'Chris Moreno'),
+    mk('u-ph5', 'policyholder', 'riley@demo.com', 'Riley Chen'),
   ];
   const base = { verified: true, licensedStates: ['New Jersey'], monthlyCap: 6 };
   const agents: AgentRow[] = [
@@ -72,6 +74,8 @@ function seed(): DB {
     ph('u-ph2', 'sam@demo.com', 'Sam Okafor', { coverage: ['Home', 'Umbrella'], timing: 'Within a month', mattersMost: 'Fast answers', phone: '(862) 555-0102' }),
     ph('u-ph3', 'dana@demo.com', 'Dana Lee', { coverage: ['Condo'], language: 'Spanish', contactMethod: 'Email 📧', timing: 'In 1 to 3 months', phone: '(201) 555-0177' }),
     ph('u-ph4', 'chris@demo.com', 'Chris Moreno', { coverage: ['Auto', 'Life'], county: 'Hudson', mattersMost: 'Best price' }),
+    ph('u-ph5', 'riley@demo.com', 'Riley Chen', { coverage: ['Life'], county: 'Bergen', contactMethod: 'Video or in person 🎥',
+      explainStyle: 'Walk me through it with examples', decisionStyle: "Give me everything and I'll research it", timing: 'Just looking around', mattersMost: 'Best price' }),
   ];
   const matches: DB['matches'] = [
     { id: 'm1', policyholderId: 'u-ph1', agentId: 'u-ag1', score: 92.5, matchedBy: 'Formula', status: 'active', createdAt: ago(30),
@@ -81,7 +85,7 @@ function seed(): DB {
       contactedAt: ago(238), milestones: { call: ago(238), quote: ago(200), sold: ago(150), review: ago(120) }, establishedAt: ago(120) },
     { id: 'm4', policyholderId: 'u-ph4', agentId: 'u-ag2', score: 0, matchedBy: 'Formula', status: 'pending_approval', createdAt: ago(1), milestones: {} },
   ];
-  return {
+  const seeded = {
     users, agents, policyholders, matches,
     ratings: [{ id: 'r1', matchId: 'm1', fit: 5, vsUsual: 'Better', note: 'Super responsive by text.', createdAt: ago(27) }],
     reviews: [{ matchId: 'm3', ease: 5, wouldRecommend: true, comment: 'Maria explained everything in Spanish. 10/10', createdAt: ago(120) }],
@@ -101,7 +105,9 @@ function seed(): DB {
     notifications: [],
     founding: [{ id: 'f1', agentId: 'u-ag3', agentName: 'Priya Shah', agentEmail: 'priya@demo.com', status: 'requested', createdAt: ago(2) }],
     session: null,
-  };
+  } as DB;
+  runMatching(seeded, 'u-ph5'); // Riley's best match is under 80%, so Riley gets the low-fit choice
+  return seeded;
 }
 
 let db: DB | null = null;
@@ -159,14 +165,14 @@ function checkEstablished(d: DB, m: DB['matches'][number]) {
 function hydrate(d: DB, m: DB['matches'][number], viewer: User): Match {
   const p = d.policyholders.find((x) => x.userId === m.policyholderId)!;
   const a = d.agents.find((x) => x.userId === m.agentId)!;
-  const revealContact = m.status !== 'pending_approval';
+  const revealContact = AGENT_VISIBLE.includes(m.status);
   return {
     ...m,
     policyholder: viewer.role !== 'policyholder' ? {
       fullName: p.fullName, quiz: p,
       email: revealContact ? p.email : undefined, phone: revealContact ? p.phone : undefined,
     } : undefined,
-    agent: a ? { fullName: a.name, email: a.email, phone: a.phone, contactMethod: a.contactMethod, languages: a.languages } : undefined,
+    agent: a && (viewer.role !== 'policyholder' || AGENT_VISIBLE.includes(m.status) || m.status === 'pending_approval') ? { fullName: a.name, email: a.email, phone: a.phone, contactMethod: a.contactMethod, languages: a.languages } : undefined,
   };
 }
 
@@ -177,23 +183,50 @@ function agentProfiles(d: DB): AgentProfile[] {
     subscribed: a.planStatus === 'active',
     monthlyCap: planById(a.plan)?.leads ?? a.monthlyCap,
     matchedThisMonth: Math.max(a.matchedThisMonth,
-      d.matches.filter((m) => m.agentId === a.userId && m.status !== 'pending_approval' && m.status !== 'replaced' && m.createdAt.startsWith(month)).length),
+      d.matches.filter((m) => m.agentId === a.userId && AGENT_VISIBLE.includes(m.status) && m.status !== 'replaced' && m.createdAt.startsWith(month)).length),
   }));
 }
 
 /** Runs the formula and creates a match (pending admin approval, like the sheet). */
-function runMatching(d: DB, policyholderId: string, excludeAgent?: string) {
+/** Best eligible agent for a policyholder right now (or null). */
+function bestFor(d: DB, policyholderId: string, excludeAgent?: string) {
   const p = d.policyholders.find((x) => x.userId === policyholderId)!;
   const ranked = rankAgents(p, agentProfiles(d).filter((a) => a.id !== excludeAgent));
   const top = ranked[0] && ranked[0].score >= 0 ? ranked[0] : null;
+  return { p, top, fit: top ? fitSummary(top, p) : undefined };
+}
+
+/** Runs the formula. 80%+ goes to admin approval; below that, the policyholder decides. */
+function runMatching(d: DB, policyholderId: string, excludeAgent?: string) {
+  const { p, top, fit } = bestFor(d, policyholderId, excludeAgent);
+  const good = !!top && top.score >= GOOD_MATCH_THRESHOLD;
   const m: DB['matches'][number] = {
-    id: uid(), policyholderId, agentId: top?.agentId ?? '', score: top?.score ?? -1, matchedBy: 'Formula',
-    status: AUTO_APPROVE && top ? 'active' : 'pending_approval', createdAt: now(), milestones: {},
+    id: uid(), policyholderId, agentId: top?.agentId ?? '', score: top?.score ?? -1, matchedBy: 'Formula', fit,
+    status: good ? (AUTO_APPROVE ? 'active' : 'pending_approval') : top ? 'low_fit' : 'waiting', createdAt: now(), milestones: {},
   };
   d.matches.push(m);
-  log(d, 'match_suggested', 'System', top
-    ? `${p.fullName} → suggested ${nameOf(d, top.agentId)} (score ${top.score}). Waiting for your approval.`
-    : `${p.fullName} has no eligible agent yet.`, m.id);
+  log(d, 'match_suggested', 'System', good
+    ? `${p.fullName} → suggested ${nameOf(d, top!.agentId)} (score ${top!.score}). Waiting for your approval.`
+    : top ? `${p.fullName}'s best match is ${top.score}% (${nameOf(d, top.agentId)}), under ${GOOD_MATCH_THRESHOLD}%. They're choosing: match anyway or wait.`
+    : `${p.fullName} has no eligible agent yet and is waiting in the queue.`, m.id);
+  return m;
+}
+
+/** Re-run the formula for one queued match; promotes it to approval if it now clears the threshold. */
+function recheck(d: DB, m: DB['matches'][number]) {
+  const { p, top, fit } = bestFor(d, m.policyholderId);
+  m.agentId = top?.agentId ?? ''; m.score = top?.score ?? -1; m.fit = fit;
+  if (top && top.score >= GOOD_MATCH_THRESHOLD) {
+    m.status = 'pending_approval';
+    notify(d, m.policyholderId, { kind: 'matched', title: 'A great match just opened up 🧡', body: `We found a ${top.score}% match. Our team is confirming it now.`, matchId: m.id });
+    log(d, 'match_suggested', 'System', `${p.fullName} moved out of the queue: ${nameOf(d, top.agentId)} is a ${top.score}% match. Waiting for your approval.`, m.id);
+  }
+  return m.score;
+}
+
+/** Re-check everyone waiting in the queue (after an agent is verified or starts a plan). */
+function recheckQueue(d: DB) {
+  d.matches.filter((m) => m.status === 'waiting').forEach((m) => recheck(d, m));
 }
 
 export const demoBackend: Backend = {
@@ -270,15 +303,43 @@ export const demoBackend: Backend = {
   },
   async requestMatch() {
     const d = await load(); const u = await me();
-    const open = d.matches.find((m) => m.policyholderId === u.id && ['pending_approval', 'active', 'established'].includes(m.status));
+    const open = d.matches.find((m) => m.policyholderId === u.id && OPEN_FOR_POLICYHOLDER.includes(m.status));
     if (!open) runMatching(d, u.id);
     await save();
+  },
+
+  async acceptLowFit(matchId) {
+    const d = await load(); const u = await me();
+    const m = d.matches.find((x) => x.id === matchId && x.policyholderId === u.id && (x.status === 'low_fit' || x.status === 'waiting'));
+    if (!m) return;
+    recheck(d, m); // use the freshest best agent
+    if (m.status !== 'pending_approval' && m.agentId) {
+      m.status = 'pending_approval';
+      log(d, 'match_suggested', u.fullName, `${u.fullName} chose to match now with ${nameOf(d, m.agentId)} (${m.score}%). Waiting for your approval.`, m.id);
+    }
+    await save();
+  },
+  async waitForBetter(matchId) {
+    const d = await load(); const u = await me();
+    const m = d.matches.find((x) => x.id === matchId && x.policyholderId === u.id && x.status === 'low_fit');
+    if (!m) return;
+    m.status = 'waiting';
+    log(d, 'match_suggested', u.fullName, `${u.fullName} chose to wait for a ${GOOD_MATCH_THRESHOLD}%+ match (best now: ${m.score}%).`, m.id);
+    await save();
+  },
+  async recheckMatch(matchId) {
+    const d = await load(); const u = await me();
+    const m = d.matches.find((x) => x.id === matchId && x.policyholderId === u.id && (x.status === 'low_fit' || x.status === 'waiting'));
+    if (!m) return -1;
+    const score = recheck(d, m);
+    await save();
+    return score;
   },
 
   async listMyMatches() {
     const d = await load(); const u = await me();
     return d.matches
-      .filter((m) => (u.role === 'agent' ? m.agentId === u.id && m.status !== 'pending_approval' : m.policyholderId === u.id))
+      .filter((m) => (u.role === 'agent' ? m.agentId === u.id && AGENT_VISIBLE.includes(m.status) : m.policyholderId === u.id))
       .map((m) => hydrate(d, m, u))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   },
@@ -372,11 +433,13 @@ export const demoBackend: Backend = {
   async listPendingMatches(): Promise<PendingMatch[]> {
     const d = await load(); const u = await me();
     const profiles = agentProfiles(d);
-    return d.matches.filter((m) => m.status === 'pending_approval').map((m) => {
+    const order = { pending_approval: 0, low_fit: 1, waiting: 2 } as Record<string, number>;
+    return d.matches.filter((m) => m.status in order).sort((a, b) => order[a.status] - order[b.status]).map((m) => {
       const p = d.policyholders.find((x) => x.userId === m.policyholderId)!;
       const ranked = rankAgents(p, profiles);
       const top = ranked[0]?.score >= 0 ? ranked[0] : null;
       return {
+        queue: m.status === 'pending_approval' ? 'approval' as const : m.status === 'low_fit' ? 'deciding' as const : 'waiting' as const,
         match: hydrate(d, m, u),
         policyholderName: p.fullName,
         suggestedAgentName: top ? nameOf(d, top.agentId) : null,
@@ -439,6 +502,7 @@ export const demoBackend: Backend = {
   async setAgentVerified(agentId, verified) {
     const d = await load();
     d.agents.find((x) => x.id === agentId)!.verified = verified;
+    if (verified) recheckQueue(d);
     await save();
   },
 
@@ -449,6 +513,7 @@ export const demoBackend: Backend = {
       throw new Error('Validate your founding agent code first.');
     const plan = planById(planId)!;
     a.plan = planId; a.planStatus = 'active'; a.monthlyCap = plan.leads;
+    recheckQueue(d);
     log(d, 'match_approved', u.fullName, `${u.fullName} started the ${plan.name} plan ($${plan.price}/mo, ${plan.leads} leads)`);
     await save();
     return { activated: true };

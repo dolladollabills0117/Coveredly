@@ -48,6 +48,8 @@ Any password works in demo mode. Profile → **Reset demo data** starts over.
 
 Every number from your **Key** tab is in `MATCHING_CONFIG` at the top of that file. Change a number there the same way you would on the sheet. `npm test` checks the code against hand-calculated sheet results.
 
+**80% quality bar:** if the best available agent scores under 80% (`GOOD_MATCH_THRESHOLD` in the same file), the policyholder sees "Your best match right now is 72% compatible" with a plain-language fit breakdown. They choose **Match me now** (goes to your Approvals) or **Wait for an 80%+ match** (joins the queue, with a "Check again" button). The queue re-checks automatically whenever an agent is verified or starts a plan, and notifies anyone who now has an 80%+ match. Agents never see people in the queue. Run `supabase/migrations/0003_match_quality_queue.sql` after 0002.
+
 Matching stays **manual-approval** like your sheet: the formula suggests, and you tap Approve in the admin tab. To skip approval, set the Supabase secret `AUTO_APPROVE_MATCHES=true`.
 
 ---
