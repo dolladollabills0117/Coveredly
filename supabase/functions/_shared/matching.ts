@@ -26,7 +26,7 @@ export const AG_EXPLAIN = ['Short and simple', 'With examples and stories', 'Eve
 export const AG_ADVISE = ['I recommend the best fit', 'I present 2 or 3 options', 'I lay it all out and they choose'] as const;
 export const AG_SPEED = ['Within an hour', 'Same day', 'Next business day'] as const;
 export const AG_LEAD_TYPE = ['Ready to buy now', 'Renewing soon', 'Still shopping around'] as const;
-export const AG_LINES = ['Auto', 'Home, renters or condo', 'Umbrella', 'Life'] as const;
+export const AG_LINES = ['Auto', 'Home, renters or condo', 'Landlord / dwelling fire', 'Umbrella', 'Life'] as const;
 
 // ---------- Profiles ----------
 
@@ -121,8 +121,11 @@ export function scoreAgent(ph: PolicyholderProfile, ag: AgentProfile, cfg = MATC
   const nHome = +(has(cov, 'Home') || has(cov, 'Renters') || has(cov, 'Condo'));
   const nUmb = +has(cov, 'Umbrella');
   const nLife = +has(cov, 'Life');
-  const need = nAuto + nHome + nUmb + nLife;
-  const haveLines = nAuto * +has(lines, 'Auto') + nHome * +has(lines, 'Home') + nUmb * +has(lines, 'Umbrella') + nLife * +has(lines, 'Life');
+  // Landlord / dwelling fire is its own line (not counted on the original sheet).
+  const nLandlord = +has(cov, 'Landlord');
+  const need = nAuto + nHome + nUmb + nLife + nLandlord;
+  const haveLines = nAuto * +has(lines, 'Auto') + nHome * +has(lines, 'Home') + nUmb * +has(lines, 'Umbrella') + nLife * +has(lines, 'Life')
+    + nLandlord * +has(lines, 'Landlord');
 
   const reasons: string[] = [];
   if (!ag.verified) reasons.push('Agent not verified');

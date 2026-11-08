@@ -33,7 +33,7 @@ interface DB {
   session: string | null;
 }
 
-const KEY = 'coveredly-demo-v3';
+const KEY = 'coveredly-demo-v4';
 const AUTO_APPROVE = false; // mirrors the sheet: admin approves every match by hand
 const now = () => new Date().toISOString();
 const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
@@ -60,7 +60,7 @@ function seed(): DB {
       advises: 'I present 2 or 3 options', speed: 'Within an hour', bestLeadType: 'Ready to buy now', lines: ['Auto', 'Home, renters or condo', 'Umbrella'], matchedThisMonth: 3, plan: 'founding', planStatus: 'active' },
     { ...base, id: 'u-ag2', userId: 'u-ag2', name: 'Jordan Park', email: 'jordan@demo.com', license: '2345678', counties: ['Bergen'],
       contactMethod: 'Phone call 📞', languages: ['English', 'Korean'], explains: 'Short and simple', advises: 'I recommend the best fit',
-      speed: 'Same day', bestLeadType: 'Renewing soon', lines: ['Auto', 'Home, renters or condo', 'Life'], matchedThisMonth: 1, plan: 'dialogue', planStatus: 'active' },
+      speed: 'Same day', bestLeadType: 'Renewing soon', lines: ['Auto', 'Home, renters or condo', 'Landlord / dwelling fire', 'Life'], matchedThisMonth: 1, plan: 'dialogue', planStatus: 'active' },
     { ...base, id: 'u-ag3', userId: 'u-ag3', name: 'Priya Shah', email: 'priya@demo.com', license: '3456789', verified: false, counties: ['Middlesex'],
       contactMethod: 'Email 📧', languages: ['English', 'Hindi'], explains: 'Every detail', advises: 'I lay it all out and they choose',
       speed: 'Next business day', bestLeadType: 'Still shopping around', lines: ['Life', 'Umbrella'], matchedThisMonth: 0 },

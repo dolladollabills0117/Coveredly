@@ -28,7 +28,13 @@ const perfect = { ...base, id: 'p', contactMethod: 'Text or chat 💬', explains
 assert.equal(scoreAgent(ph, perfect).score, 100);
 assert.equal(suggestAgent(ph, [base, perfect])?.agentId, 'p');
 assert.equal(suggestAgent(ph, [{ ...base, verified: false }]), null);
+// Landlord / dwelling fire: only agents who write it qualify; half credit when they write 1 of 2 needed lines
+const landlordPh = { ...ph, coverage: ['Landlord / dwelling fire'] };
+assert.equal(scoreAgent(landlordPh, base).score, -1);
+assert.ok(scoreAgent(landlordPh, { ...base, lines: ['Landlord / dwelling fire'] }).score > 0);
+const both = { ...ph, coverage: ['Auto', 'Landlord / dwelling fire'] };
+assert.equal(scoreAgent(both, base).breakdown!.coverageFit, 12.5);
 const fit = fitSummary(scoreAgent(ph, base), ph);
 assert.deepEqual(fit.map((f) => f.level), ['partial', 'partial', 'partial', 'great', 'partial', 'partial']);
 assert.ok(fitSummary(scoreAgent(ph, perfect), ph).every((f) => f.level === 'great'));
-console.log('✓ matching formula matches the Google Sheet (13 checks)');
+console.log('✓ matching formula matches the Google Sheet (16 checks)');
