@@ -39,6 +39,20 @@ export const MILESTONES = [
 ] as const;
 export type MilestoneKey = (typeof MILESTONES)[number]['key'];
 
+/** Personal lines an agent can record as sold (same names as the policyholder quiz). */
+export const SALE_LINES = ['Auto', 'Home', 'Renters', 'Condo', 'Landlord / dwelling fire', 'Umbrella', 'Life'] as const;
+export const LINE_LABEL: Record<string, string> = { Home: 'Homeowners', 'Landlord / dwelling fire': 'Landlord' };
+export const lineLabel = (l: string) => LINE_LABEL[l] ?? l;
+
+/** One policy sold on a match. A match can have several (e.g. auto now, life months later). */
+export interface PolicySale { id: string; matchId: string; line: string; soldAt: string }
+
+/** Raw data behind the admin Sales Insights screen. */
+export interface InsightsData {
+  leads: { matchId: string; agentId: string; agentName: string; matchedAt: string; requested: string[]; status: MatchStatus }[];
+  sales: { matchId: string; agentId: string; agentName: string; line: string; matchedAt: string; soldAt: string }[];
+}
+
 /**
  * low_fit  = best match is under the threshold; policyholder is choosing (match anyway / wait)
  * waiting  = policyholder chose to wait in the queue for a better match
@@ -59,6 +73,8 @@ export interface Match {
   createdAt: string;
   contactedAt?: string;
   milestones: Partial<Record<MilestoneKey, string>>; // ISO timestamps
+  /** Policies sold on this match, by line. The first one sets the "Policy sold" milestone. */
+  sales?: PolicySale[];
   establishedAt?: string;
   /** What fits and what doesn't, in plain language (no agent identity). */
   fit?: FitItem[];
@@ -189,7 +205,9 @@ export interface Backend {
   listMyMatches(): Promise<Match[]>;
   getMatch(id: string): Promise<Match | null>;
   markContacted(matchId: string): Promise<void>;
-  logMilestone(matchId: string, key: Exclude<MilestoneKey, 'review'>): Promise<void>;
+  logMilestone(matchId: string, key: 'call' | 'quote'): Promise<void>;
+  /** Records the policies sold (by line). The first sale also completes the "Policy sold" milestone. */
+  logSale(matchId: string, lines: string[]): Promise<void>;
   rateLead(matchId: string, r: Omit<LeadRating, 'id' | 'matchId' | 'createdAt'>): Promise<void>;
   listRatings(matchId: string): Promise<LeadRating[]>;
   reportLead(matchId: string, reason: string, details?: string): Promise<void>;
@@ -216,6 +234,7 @@ export interface Backend {
   listActivity(): Promise<Activity[]>;
   listAgents(): Promise<AdminAgent[]>;
   listPolicyholders(): Promise<AdminPolicyholder[]>;
+  getInsightsData(): Promise<InsightsData>;
   setAgentVerified(agentId: string, verified: boolean): Promise<void>;
 
   // Agent plans & payment

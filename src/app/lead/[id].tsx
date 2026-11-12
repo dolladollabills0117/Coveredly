@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { MilestoneTimeline } from '../../components/Milestones';
 import { Sheet } from '../../components/Sheet';
-import { Body, Button, Card, Divider, Eyebrow, Field, H1, H3, Pill, Row, Screen, Small, Stars, tap } from '../../components/ui';
+import { Body, Button, Card, Checkbox, Divider, Eyebrow, Field, H1, H3, Pill, Row, Screen, Small, Stars, tap } from '../../components/ui';
 import { LEAD_REPLACEMENT_POLICY } from '../../config/leadReplacementPolicy';
 import { api } from '../../lib/backend';
 import { timeAgo, useLive } from '../../lib/hooks';
 import { colors, fonts, radius, space } from '../../lib/theme';
-import type { LeadRating } from '../../lib/types';
+import { lineLabel, SALE_LINES, type LeadRating } from '../../lib/types';
 
 export default function LeadDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -95,6 +95,22 @@ export default function LeadDetail() {
             {!m.milestones.quote && <Button small variant="outline" icon="document-text-outline" title="Log quote" onPress={() => api.logMilestone(m.id, 'quote')} />}
           </Row>
         )}
+        {!!m.sales?.length && (
+          <View style={{ marginTop: space(4), paddingTop: space(3), borderTopWidth: 1, borderTopColor: colors.line, gap: 6 }}>
+            <Small style={{ fontFamily: fonts.semibold, color: colors.ink }}>Policies sold</Small>
+            {m.sales.map((s) => (
+              <Row key={s.id} gap={2}>
+                <Ionicons name="shield-checkmark" size={16} color={colors.green} />
+                <Body style={{ flex: 1 }}>{lineLabel(s.line)}</Body>
+                <Small>{timeAgo(s.soldAt)}</Small>
+              </Row>
+            ))}
+            {!locked && (
+              <Button small variant="outline" icon="add-circle-outline" title="Log another policy sold" style={{ marginTop: 6, alignSelf: 'flex-start' }}
+                onPress={() => setSoldOpen(true)} />
+            )}
+          </View>
+        )}
         {m.milestones.sold && !m.milestones.review && (
           <Small style={{ marginTop: space(4) }}>Waiting on {p?.fullName?.split(' ')[0]}'s review. We've nudged them. Ask them to tap "Leave a review" in their app.</Small>
         )}
@@ -140,23 +156,45 @@ export default function LeadDetail() {
         </Pressable>
       )}
 
-      <SoldSheet visible={soldOpen} onClose={() => setSoldOpen(false)} name={p?.fullName ?? ''} onConfirm={async () => {
-        await api.logMilestone(m.id, 'sold'); setSoldOpen(false); setRateOpen(true);
-      }} />
+      <SoldSheet visible={soldOpen} onClose={() => setSoldOpen(false)} name={p?.fullName ?? ''} first={!m.milestones.sold}
+        requested={q?.coverage ?? []} alreadySold={(m.sales ?? []).map((s) => s.line)}
+        onConfirm={async (lines) => {
+          const first = !m.milestones.sold;
+          await api.logSale(m.id, lines); setSoldOpen(false);
+          if (first) setRateOpen(true);
+        }} />
       <RateSheet visible={rateOpen} onClose={() => setRateOpen(false)} onSave={async (r) => { await api.rateLead(m.id, r); setRateOpen(false); }} />
       <ReportSheet visible={reportOpen} onClose={() => setReportOpen(false)} onSave={async (reason, details) => { await api.reportLead(m.id, reason, details); setReportOpen(false); }} />
     </Screen>
   );
 }
 
-function SoldSheet({ visible, onClose, onConfirm, name }: { visible: boolean; onClose: () => void; onConfirm: () => Promise<void>; name: string }) {
+function SoldSheet({ visible, onClose, onConfirm, name, first, requested, alreadySold }: {
+  visible: boolean; onClose: () => void; onConfirm: (lines: string[]) => Promise<void>; name: string;
+  first: boolean; requested: string[]; alreadySold: string[];
+}) {
   const [busy, setBusy] = useState(false);
+  const [lines, setLines] = useState<string[]>([]);
+  const toggle = (l: string) => setLines((cur) => (cur.includes(l) ? cur.filter((x) => x !== l) : [...cur, l]));
+  // Lines they asked for come first; lines already sold on this client are hidden.
+  const options = [...SALE_LINES].filter((l) => !alreadySold.includes(l))
+    .sort((a, b) => Number(requested.includes(b)) - Number(requested.includes(a)));
   return (
-    <Sheet visible={visible} onClose={onClose} title="Policy sold? 🛡️">
-      <Body style={{ color: colors.inkSoft, marginBottom: space(5) }}>
-        Nice work! We'll log the sale, let admin know, and ask {name.split(' ')[0]} for a quick review. Once they leave it, you're officially Established.
+    <Sheet visible={visible} onClose={onClose} title={first ? 'Policy sold? 🛡️' : 'Another policy sold? 🛡️'}>
+      <Body style={{ color: colors.inkSoft, marginBottom: space(4) }}>
+        {first
+          ? `Nice work! Tick what you sold. We'll log it, let admin know, and ask ${name.split(' ')[0]} for a quick review. Once they leave it, you're officially Established.`
+          : 'Great cross-sell! Tick the new policies you sold.'}
       </Body>
-      <Button title="Yes, I sold a policy" variant="success" loading={busy} onPress={async () => { setBusy(true); await onConfirm(); setBusy(false); }} />
+      <Small style={{ fontFamily: fonts.semibold, color: colors.ink, marginBottom: 10 }}>Which policies did you sell?</Small>
+      <View style={{ gap: 12, marginBottom: space(5) }}>
+        {options.map((l) => (
+          <Checkbox key={l} checked={lines.includes(l)} onChange={() => toggle(l)}
+            label={`${lineLabel(l)}${requested.includes(l) ? '  · requested' : ''}`} />
+        ))}
+      </View>
+      <Button title={first ? 'Yes, I sold a policy' : 'Save'} variant="success" disabled={!lines.length} loading={busy}
+        onPress={async () => { setBusy(true); try { await onConfirm(lines); setLines([]); } finally { setBusy(false); } }} />
       <Button title="Not yet" variant="ghost" onPress={onClose} style={{ marginTop: 8 }} />
     </Sheet>
   );

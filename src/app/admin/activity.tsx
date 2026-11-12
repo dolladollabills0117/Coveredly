@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { View } from 'react-native';
 import { Body, Card, Eyebrow, H1, Row, Screen, Small } from '../../components/ui';
 import { api } from '../../lib/backend';
@@ -31,6 +32,16 @@ export default function ActivityFeed() {
           </Card>
         ))}
       </Row>
+      <Card onPress={() => router.push('/insights')} style={{ marginBottom: space(4), backgroundColor: colors.ink }}>
+        <Row>
+          <Ionicons name="bar-chart" size={24} color={colors.orange} />
+          <View style={{ flex: 1 }}>
+            <Body style={{ color: colors.white, fontWeight: '600' }}>Sales insights</Body>
+            <Small style={{ color: '#BDB3A9' }}>How long each line takes to sell, by agent</Small>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.white} />
+        </Row>
+      </Card>
       <Card>
         {all.map((a, i) => {
           const [icon, color] = ICON[a.type] ?? ['ellipse-outline', colors.inkSoft];

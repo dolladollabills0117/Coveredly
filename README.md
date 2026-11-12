@@ -14,6 +14,8 @@ A match becomes **Established** after these four milestones: first phone call �
 
 **Agent Standards:** leads are capped, so spots go to agents who show up for their clients. Each agent's Profile has a **Your standing** card (first contact within 3 days, follow-up, reviews, close rate, activity). From Admin → Agents you can send a **30-day notice**, clear it, or remove the agent once the 30 days are up (this cancels their subscription). Agents must tick **I agree to the Agent Terms, Agent Standards and Privacy Policy** before paying. The app saves the exact terms version and server time as proof, and asks agents to agree again whenever the terms change.
 
+**Sales insights (Admin → Activity → Sales insights):** when agents log a sale they tick which policies they sold, and can add later sales on the same client ("Log another policy sold"). You get each line's average, typical, fastest and slowest days to sell, and its close rate, for everyone or one agent, over 90 days, 12 months or all time. After 5 sales of a line it suggests a time window based on your data (the number of days within which 80% of those sales closed), ready for updating the Agent Standards.
+
 **Also:** polka-dot background (toggle in Profile, saved per device), and a Privacy Policy page reachable from welcome, sign-up, the plan screen and both profiles. The policy text is in `src/config/privacyPolicy.ts`.
 
 Built with Expo (React Native) + Supabase. One codebase ships to both the App Store and Google Play.
@@ -100,7 +102,7 @@ Matching stays **manual-approval** like your sheet: the formula suggests, and yo
    ```
 3. Stripe → Developers → Webhooks: add the `stripe-webhook` function URL, with events `checkout.session.completed`, `customer.subscription.updated` and `customer.subscription.deleted`. Then `supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...`
 4. Run `supabase/migrations/0002_plans_and_founding.sql` in the SQL Editor (after 0001).
-5. Run `0003_match_quality_queue.sql` and `0004_agent_standards_terms.sql` too, then deploy `supabase functions deploy remove-agent` (it cancels the Stripe subscription when you remove an agent).
+5. Run `0003_match_quality_queue.sql`, `0004_agent_standards_terms.sql` and `0005_policy_sales.sql` too, then deploy `supabase functions deploy remove-agent` (it cancels the Stripe subscription when you remove an agent).
 
 > **Apple / Google payment rules:** the app sends agents to Stripe's secure web checkout. US App Store and Google Play rules currently allow linking out to web payments for US users, and lead subscriptions are a B2B service. Confirm this when you submit. If a reviewer pushes back, the fallback is in-app purchase subscriptions (Apple/Google take a 15–30% cut).
 

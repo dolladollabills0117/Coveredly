@@ -13,10 +13,10 @@ import { fitSummary, GOOD_MATCH_THRESHOLD, rankAgents, type AgentProfile } from 
 import { planById, type PlanId } from '../../config/plans';
 import { AGENT_TERMS_VERSION, computeStanding, latest, STANDARDS, type Standing } from '../../../supabase/functions/_shared/standing';
 import type {
-  Activity, ActivityType, AdminAgent, AdminPolicyholder, AppNotification, Backend, FoundingRequest, LeadRating, LeadReport, Match,
+  Activity, ActivityType, AdminAgent, AdminPolicyholder, InsightsData, PolicySale, AppNotification, Backend, FoundingRequest, LeadRating, LeadReport, Match,
   Message, PendingMatch, PolicyholderQuiz, Review, Role, User,
 } from '../types';
-import { AGENT_VISIBLE, OPEN_FOR_POLICYHOLDER } from '../types';
+import { AGENT_VISIBLE, lineLabel, OPEN_FOR_POLICYHOLDER } from '../types';
 
 type AgentRow = AgentProfile & { userId: string; email: string; license: string; phone?: string; plan?: PlanId | null; planStatus?: 'active' | 'pending' | 'canceled' | null;
   warningAt?: string; warningReason?: string; removedAt?: string; termsAcceptedAt?: string; termsVersion?: string };
@@ -32,10 +32,11 @@ interface DB {
   activity: Activity[];
   notifications: AppNotification[];
   founding: FoundingRequest[];
+  sales: PolicySale[];
   session: string | null;
 }
 
-const KEY = 'coveredly-demo-v5';
+const KEY = 'coveredly-demo-v6';
 const AUTO_APPROVE = false; // mirrors the sheet: admin approves every match by hand
 const now = () => new Date().toISOString();
 const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
@@ -55,6 +56,9 @@ function seed(): DB {
     mk('u-ph4', 'policyholder', 'chris@demo.com', 'Chris Moreno'),
     mk('u-ph5', 'policyholder', 'riley@demo.com', 'Riley Chen'),
     mk('u-ph6', 'policyholder', 'avery@demo.com', 'Avery Brooks'),
+    mk('u-ph7', 'policyholder', 'sofia@demo.com', 'Sofia Ramirez'),
+    mk('u-ph8', 'policyholder', 'ben@demo.com', 'Ben Carter'),
+    mk('u-ph9', 'policyholder', 'grace@demo.com', 'Grace Kim'),
   ];
   const base = { verified: true, licensedStates: ['New Jersey'], monthlyCap: 6 };
   const agents: AgentRow[] = [
@@ -81,6 +85,9 @@ function seed(): DB {
     ph('u-ph5', 'riley@demo.com', 'Riley Chen', { coverage: ['Life'], county: 'Bergen', contactMethod: 'Video or in person 🎥',
       explainStyle: 'Walk me through it with examples', decisionStyle: "Give me everything and I'll research it", timing: 'Just looking around', mattersMost: 'Best price' }),
     ph('u-ph6', 'avery@demo.com', 'Avery Brooks', { coverage: ['Home', 'Auto'], county: 'Bergen', contactMethod: 'Phone call 📞', phone: '(201) 555-0164' }),
+    ph('u-ph7', 'sofia@demo.com', 'Sofia Ramirez', { coverage: ['Auto'], language: 'Spanish', phone: '(973) 555-0110' }),
+    ph('u-ph8', 'ben@demo.com', 'Ben Carter', { coverage: ['Home', 'Umbrella'], county: 'Hudson', phone: '(201) 555-0122' }),
+    ph('u-ph9', 'grace@demo.com', 'Grace Kim', { coverage: ['Life'], county: 'Bergen', timing: 'Just looking around', contactMethod: 'Phone call 📞', phone: '(201) 555-0133' }),
   ];
   const matches: DB['matches'] = [
     { id: 'm1', policyholderId: 'u-ph1', agentId: 'u-ag1', score: 92.5, matchedBy: 'Formula', status: 'active', createdAt: ago(30),
@@ -90,11 +97,29 @@ function seed(): DB {
       contactedAt: ago(238), milestones: { call: ago(238), quote: ago(200), sold: ago(150), review: ago(120) }, establishedAt: ago(120) },
     { id: 'm4', policyholderId: 'u-ph4', agentId: 'u-ag2', score: 0, matchedBy: 'Formula', status: 'pending_approval', createdAt: ago(1), milestones: {} },
     { id: 'm5', policyholderId: 'u-ph6', agentId: 'u-ag2', score: 84.4, matchedBy: 'Formula', status: 'active', createdAt: ago(6 * 24), milestones: {} },
+    { id: 'm6', policyholderId: 'u-ph7', agentId: 'u-ag1', score: 95, matchedBy: 'Formula', status: 'established', createdAt: ago(60 * 24), contactedAt: ago(60 * 24 - 2),
+      milestones: { call: ago(60 * 24 - 2), quote: ago(57 * 24), sold: ago(48 * 24), review: ago(46 * 24) }, establishedAt: ago(46 * 24) },
+    { id: 'm7', policyholderId: 'u-ph8', agentId: 'u-ag1', score: 88.3, matchedBy: 'Formula', status: 'established', createdAt: ago(110 * 24), contactedAt: ago(110 * 24 - 5),
+      milestones: { call: ago(109 * 24), quote: ago(100 * 24), sold: ago(69 * 24), review: ago(66 * 24) }, establishedAt: ago(66 * 24) },
+    { id: 'm8', policyholderId: 'u-ph9', agentId: 'u-ag2', score: 81.7, matchedBy: 'Formula', status: 'established', createdAt: ago(150 * 24), contactedAt: ago(150 * 24 - 20),
+      milestones: { call: ago(149 * 24), quote: ago(120 * 24), sold: ago(53 * 24), review: ago(50 * 24) }, establishedAt: ago(50 * 24) },
   ];
   const seeded = {
     users, agents, policyholders, matches,
     ratings: [{ id: 'r1', matchId: 'm1', fit: 5, vsUsual: 'Better', note: 'Super responsive by text.', createdAt: ago(27) }],
-    reviews: [{ matchId: 'm3', ease: 5, wouldRecommend: true, comment: 'Maria explained everything in Spanish. 10/10', createdAt: ago(120) }],
+    reviews: [
+      { matchId: 'm3', ease: 5, wouldRecommend: true, comment: 'Maria explained everything in Spanish. 10/10', createdAt: ago(120) },
+      { matchId: 'm6', ease: 5, wouldRecommend: true, createdAt: ago(46 * 24) },
+      { matchId: 'm7', ease: 4, wouldRecommend: true, createdAt: ago(66 * 24) },
+      { matchId: 'm8', ease: 5, wouldRecommend: true, comment: 'Jordan never pushed. Took my time and got a great term policy.', createdAt: ago(50 * 24) },
+    ],
+    sales: [
+      { id: 's1', matchId: 'm3', line: 'Condo', soldAt: ago(150) },
+      { id: 's2', matchId: 'm6', line: 'Auto', soldAt: ago(48 * 24) },
+      { id: 's3', matchId: 'm7', line: 'Home', soldAt: ago(69 * 24) },
+      { id: 's4', matchId: 'm7', line: 'Umbrella', soldAt: ago(55 * 24) },
+      { id: 's5', matchId: 'm8', line: 'Life', soldAt: ago(53 * 24) },
+    ],
     reports: [],
     messages: [
       { id: 'msg1', matchId: 'm1', senderId: 'u-ag1', body: "Hi Alex! I'm Maria, your Coveredly match. Is now a good time to text about your auto + renters quote?", createdAt: ago(29) },
@@ -191,6 +216,7 @@ function hydrate(d: DB, m: DB['matches'][number], viewer: User): Match {
   const revealContact = AGENT_VISIBLE.includes(m.status);
   return {
     ...m,
+    sales: d.sales.filter((s) => s.matchId === m.id).sort((a, b) => a.soldAt.localeCompare(b.soldAt)),
     policyholder: viewer.role !== 'policyholder' ? {
       fullName: p.fullName, quiz: p,
       email: revealContact ? p.email : undefined, phone: revealContact ? p.phone : undefined,
@@ -380,20 +406,50 @@ export const demoBackend: Backend = {
     }
     await save();
   },
-  async logMilestone(matchId, key) {
+  async logMilestone(matchId, key: 'call' | 'quote') {
     const d = await load(); const u = await me();
     const m = d.matches.find((x) => x.id === matchId)!;
     if (!m.milestones[key]) {
       m.milestones[key] = now();
       if (!m.contactedAt) m.contactedAt = now();
-      const label = { call: 'had the first call with', quote: 'delivered a quote to', sold: 'sold a policy to' }[key];
+      const label = { call: 'had the first call with', quote: 'delivered a quote to' }[key];
       log(d, 'milestone', u.fullName, `${u.fullName} ${label} ${nameOf(d, m.policyholderId)}`, m.id);
-      if (key === 'sold') {
-        notify(d, m.policyholderId, { kind: 'milestone', title: 'Your policy is in place 🛡️', body: `Leave ${u.fullName} a quick review to make it official.`, matchId: m.id });
-      }
       checkEstablished(d, m);
     }
     await save();
+  },
+  async logSale(matchId, lines) {
+    const d = await load(); const u = await me();
+    const m = d.matches.find((x) => x.id === matchId && x.agentId === u.id);
+    if (!m || !lines.length) return;
+    const t = now();
+    const fresh = lines.filter((l) => !d.sales.some((s) => s.matchId === matchId && s.line === l));
+    fresh.forEach((line) => d.sales.push({ id: uid(), matchId, line, soldAt: t }));
+    const names = fresh.map((l) => lineLabel(l)).join(', ');
+    if (!m.milestones.sold) {
+      m.milestones.sold = t;
+      if (!m.contactedAt) m.contactedAt = t;
+      log(d, 'milestone', u.fullName, `${u.fullName} sold ${names} to ${nameOf(d, m.policyholderId)}`, m.id);
+      notify(d, m.policyholderId, { kind: 'milestone', title: 'Your policy is in place 🛡️', body: `Leave ${u.fullName} a quick review to make it official.`, matchId: m.id });
+      checkEstablished(d, m);
+    } else if (fresh.length) {
+      log(d, 'milestone', u.fullName, `${u.fullName} sold another policy (${names}) to ${nameOf(d, m.policyholderId)}`, m.id);
+    }
+    await save();
+  },
+  async getInsightsData(): Promise<InsightsData> {
+    const d = await load();
+    const counted = d.matches.filter((m) => AGENT_VISIBLE.includes(m.status) && m.agentId);
+    return {
+      leads: counted.map((m) => ({
+        matchId: m.id, agentId: m.agentId, agentName: nameOf(d, m.agentId), matchedAt: m.createdAt, status: m.status,
+        requested: d.policyholders.find((p) => p.userId === m.policyholderId)?.coverage ?? [],
+      })),
+      sales: d.sales.flatMap((s) => {
+        const m = d.matches.find((x) => x.id === s.matchId);
+        return m ? [{ matchId: s.matchId, agentId: m.agentId, agentName: nameOf(d, m.agentId), line: s.line, matchedAt: m.createdAt, soldAt: s.soldAt }] : [];
+      }),
+    };
   },
   async rateLead(matchId, r) {
     const d = await load(); const u = await me();

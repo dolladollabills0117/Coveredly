@@ -57,6 +57,7 @@ async function hydrate(rows: any[]): Promise<Match[]> {
   if (!rows.length) return [];
   const s = supabaseClient();
   const ids = [...new Set(rows.flatMap((r) => [r.policyholder_id, r.agent_id]).filter(Boolean))];
+  const salesRes = await s.from('policy_sales').select('id, match_id, line, sold_at').in('match_id', rows.map((r) => r.id)).order('sold_at');
   const [profiles, phs, ags] = await Promise.all([
     s.from('profiles').select('id, full_name, email, phone').in('id', ids),
     s.from('policyholders').select('*').in('user_id', ids),
@@ -72,6 +73,7 @@ async function hydrate(rows: any[]): Promise<Match[]> {
     return {
       id: r.id, policyholderId: r.policyholder_id, agentId: r.agent_id, score: Number(r.score), matchedBy: r.matched_by, status: r.status,
       createdAt: r.approved_at ?? r.created_at, contactedAt: r.contacted_at ?? undefined, establishedAt: r.established_at ?? undefined, milestones, fit: r.fit ?? undefined,
+      sales: (salesRes.data ?? []).filter((x: any) => x.match_id === r.id).map((x: any) => ({ id: x.id, matchId: x.match_id, line: x.line, soldAt: x.sold_at })),
       policyholder: pp && ph ? { fullName: pp.full_name, email: pp.email, phone: pp.phone ?? undefined, quiz: { ...phFromRow(ph), fullName: pp.full_name } } : undefined,
       agent: ap ? { fullName: ap.full_name, email: ap.email, phone: ap.phone ?? undefined, contactMethod: ag?.contact_method ?? '', languages: ag?.languages ?? [] } : undefined,
     };
@@ -178,6 +180,28 @@ export const supabaseBackend: Backend = {
   },
   async markContacted(mid) { ok(await supabaseClient().rpc('mark_contacted', { mid })); },
   async logMilestone(mid, k) { ok(await supabaseClient().rpc('log_milestone', { mid, k })); },
+  async logSale(mid, lines) { ok(await supabaseClient().rpc('log_sale', { mid, p_lines: lines })); },
+  async getInsightsData() {
+    const s = supabaseClient();
+    const [matches, phs, sales, names] = await Promise.all([
+      s.from('matches').select('id, agent_id, policyholder_id, status, approved_at, created_at').in('status', ['active', 'established', 'reported', 'replaced']),
+      s.from('policyholders').select('user_id, coverage'),
+      s.from('policy_sales').select('match_id, agent_id, line, sold_at'),
+      s.from('profiles').select('id, full_name').eq('role', 'agent'),
+    ]);
+    const nameOf = (id: string) => (names.data ?? []).find((n: any) => n.id === id)?.full_name ?? '';
+    const ms = matches.data ?? [];
+    return {
+      leads: ms.filter((m: any) => m.agent_id).map((m: any) => ({
+        matchId: m.id, agentId: m.agent_id, agentName: nameOf(m.agent_id), matchedAt: m.approved_at ?? m.created_at, status: m.status,
+        requested: (phs.data ?? []).find((p: any) => p.user_id === m.policyholder_id)?.coverage ?? [],
+      })),
+      sales: (sales.data ?? []).flatMap((x: any) => {
+        const m: any = ms.find((y: any) => y.id === x.match_id);
+        return m ? [{ matchId: x.match_id, agentId: x.agent_id, agentName: nameOf(x.agent_id), line: x.line, matchedAt: m.approved_at ?? m.created_at, soldAt: x.sold_at }] : [];
+      }),
+    };
+  },
   async rateLead(mid, r) { ok(await supabaseClient().rpc('rate_lead', { mid, p_fit: r.fit, p_vs: r.vsUsual, p_note: r.note ?? null })); },
   async listRatings(mid) {
     const rows = ok(await supabaseClient().from('lead_ratings').select('*').eq('match_id', mid).order('created_at', { ascending: false }));
