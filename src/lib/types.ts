@@ -49,8 +49,8 @@ export interface PolicySale { id: string; matchId: string; line: string; soldAt:
 
 /** Raw data behind the admin Sales Insights screen. */
 export interface InsightsData {
-  leads: { matchId: string; agentId: string; agentName: string; matchedAt: string; requested: string[]; status: MatchStatus }[];
-  sales: { matchId: string; agentId: string; agentName: string; line: string; matchedAt: string; soldAt: string }[];
+  leads: { matchId: string; agentId: string; agentName: string; matchedAt: string; requested: string[]; status: MatchStatus; longTerm?: boolean }[];
+  sales: { matchId: string; agentId: string; agentName: string; line: string; matchedAt: string; soldAt: string; longTerm?: boolean }[];
 }
 
 /**
@@ -75,6 +75,8 @@ export interface Match {
   milestones: Partial<Record<MilestoneKey, string>>; // ISO timestamps
   /** Policies sold on this match, by line. The first one sets the "Policy sold" milestone. */
   sales?: PolicySale[];
+  /** Agent marked this lead long-term (shopping around, or a longer sale like life). Not counted in sales numbers on their standing. */
+  longTerm?: boolean;
   establishedAt?: string;
   /** What fits and what doesn't, in plain language (no agent identity). */
   fit?: FitItem[];
@@ -208,6 +210,8 @@ export interface Backend {
   logMilestone(matchId: string, key: 'call' | 'quote'): Promise<void>;
   /** Records the policies sold (by line). The first sale also completes the "Policy sold" milestone. */
   logSale(matchId: string, lines: string[]): Promise<void>;
+  /** Agent marks or unmarks a lead as long-term. */
+  setLongTerm(matchId: string, longTerm: boolean): Promise<void>;
   rateLead(matchId: string, r: Omit<LeadRating, 'id' | 'matchId' | 'createdAt'>): Promise<void>;
   listRatings(matchId: string): Promise<LeadRating[]>;
   reportLead(matchId: string, reason: string, details?: string): Promise<void>;

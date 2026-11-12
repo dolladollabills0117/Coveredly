@@ -11,8 +11,8 @@ export const STANDARDS_INTRO =
 
 export const STANDARDS_LOOK_FOR = [
   { icon: 'flash-outline', title: 'Prompt service', body: `You reach every new lead within ${STANDARDS.contactWithinHours / 24} days (sooner is better), the way they asked to be contacted.` },
-  { icon: 'leaf-outline', title: 'Relationship building', body: `You stay in touch, including with leads who are still shopping around. We look for contact with at least ${pct(STANDARDS.minFollowUpRate)} of your open leads every ${STANDARDS.followUpDays} days.` },
-  { icon: 'trending-up-outline', title: 'Consistent results', body: `Over time, your leads turn into quotes and policies. Once you have ${STANDARDS.minLeadsToJudgeClose} or more leads that are at least ${STANDARDS.closeJudgeAfterDays} days old, we look for at least ${pct(STANDARDS.minCloseRate)} of them sold.` },
+  { icon: 'leaf-outline', title: 'Relationship building', body: `You stay in touch, including with leads who are still shopping around. We look for contact with at least ${pct(STANDARDS.minFollowUpRate)} of your open leads every ${STANDARDS.followUpDays} days (${STANDARDS.followUpDays * 2} days for leads you mark as long-term).` },
+  { icon: 'trending-up-outline', title: 'Consistent results', body: `Over time, your leads turn into quotes and policies. Once you have ${STANDARDS.minLeadsToJudgeClose} or more leads that are at least ${STANDARDS.closeJudgeAfterDays} days old, we hope to see around ${pct(STANDARDS.minCloseRate)} of them sold. Sales take time, so this is a guide, not a requirement on its own, and leads you mark as long-term (shopping around, or a longer sale like life insurance) aren't counted.` },
   { icon: 'star-outline', title: 'Great reviews', body: `Policyholders rate their experience after every match. We look for an average of ${STANDARDS.minReviewAvg} out of 5 or higher once you have ${STANDARDS.minReviewsToJudge} reviews.` },
   { icon: 'pulse-outline', title: 'Staying active', body: `While you have open leads, we look for activity at least every ${STANDARDS.idleDays} days.` },
 ];

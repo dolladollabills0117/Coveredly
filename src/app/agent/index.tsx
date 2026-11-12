@@ -29,12 +29,12 @@ export default function Leads() {
       <H1 style={{ marginTop: 4 }}>{user?.fullName?.split(' ')[0]}'s leads</H1>
 
       {(standing?.status === 'warning' || standing?.status === 'attention') && (
-        <Card onPress={() => router.push('/agent/profile')} style={{ marginTop: space(4), backgroundColor: standing.status === 'warning' ? colors.redSoft : colors.orangeSoft, shadowOpacity: 0, padding: space(4) }}>
+        <Card onPress={() => router.push('/agent/profile')} style={{ marginTop: space(4), backgroundColor: colors.redSoft, shadowOpacity: 0, padding: space(4) }}>
           <Row>
-            <Ionicons name={standing.status === 'warning' ? 'time' : 'alert-circle'} size={22} color={standing.status === 'warning' ? colors.red : colors.orange} />
+            <Ionicons name={standing.status === 'warning' ? 'time' : 'alert-circle'} size={22} color={colors.red} />
             <View style={{ flex: 1 }}>
               <Body style={{ fontFamily: fonts.semibold }}>
-                {standing.status === 'warning' ? `30-day notice: ${standing.warningDaysLeft} days left to improve` : 'A few things need your attention'}
+                {standing.status === 'warning' ? `30-day notice: ${standing.warningDaysLeft} days left to improve` : 'Something affects your standing'}
               </Body>
               <Small style={{ color: colors.ink }}>Tap to see your standing</Small>
             </View>
@@ -92,7 +92,7 @@ export default function Leads() {
                 <Row gap={2}>
                   <Pill tone={b === 'Established' ? 'green' : b === 'Reported' ? 'red' : b === 'New' ? 'dark' : 'neutral'}
                     label={b === 'Established' ? 'Established 🎉' : b === 'Reported' ? (m.status === 'replaced' ? 'Replaced' : 'Under review') : `${progressOf(m)}/4 milestones`} />
-                  <Small>{q?.contactMethod}</Small>
+                  {m.longTerm && b !== 'Established' ? <Pill label="Long-term" tone="neutral" icon="leaf-outline" /> : <Small>{q?.contactMethod}</Small>}
                 </Row>
                 <Small>{timeAgo(m.createdAt)}</Small>
               </Row>

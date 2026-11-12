@@ -77,6 +77,9 @@ export default function SalesInsights() {
                         <View><Body style={st.big}>{fmtDays(l.medianDays)}</Body><Small>Typical (median)</Small></View>
                       </Row>
                       <Small style={{ marginTop: 6 }}>Fastest {fmtDays(l.fastestDays)} · slowest {fmtDays(l.slowestDays)}</Small>
+                      {l.longTermSold > 0 && (
+                        <Small style={{ marginTop: 4 }}>Long-term leads: {l.longTermSold} sold · avg {fmtDays(l.longTermAvgDays)}</Small>
+                      )}
                     </>
                   ) : (
                     <Small style={{ marginTop: 6 }}>No sales of this line yet.</Small>

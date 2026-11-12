@@ -55,12 +55,23 @@ assert.equal(badReviews.checks.find((c) => c.id === 'reviews')!.ok, false);
 assert.equal(computeStanding({ now, reviewScores: [1, 1], leads: [] }).checks.find((c) => c.id === 'reviews')!.ok, true); // too few to judge
 const noClose = computeStanding({ now, reviewScores: [], leads: Array.from({ length: 6 }, () => ({ status: 'active', matchedAt: ago(45), contactedAt: ago(44), lastTouchAt: ago(2) })) });
 assert.equal(noClose.checks.find((c) => c.id === 'closing')!.ok, false);
+assert.equal(noClose.status, 'good'); // sales in progress never affect standing
+const lt = computeStanding({ now, reviewScores: [], leads: Array.from({ length: 6 }, () => ({ status: 'active', matchedAt: ago(45), contactedAt: ago(44), lastTouchAt: ago(50), longTerm: true })) });
+assert.equal(lt.checks.find((c) => c.id === 'closing')!.ok, true); // long-term leads aren't counted
+assert.equal(lt.checks.find((c) => c.id === 'followup')!.ok, true); // 60-day check-in window for long-term
+assert.equal(computeStanding({ now, reviewScores: [], leads: [{ status: 'active', matchedAt: ago(45), contactedAt: ago(44), lastTouchAt: ago(50) }] }).checks.find((c) => c.id === 'followup')!.ok, false);
 const warned = computeStanding({ now, reviewScores: [], leads: [], warningAt: ago(10), warningReason: 'test' });
 assert.equal(warned.status, 'warning');
 assert.equal(warned.warningDaysLeft, 20);
 assert.equal(computeStanding({ now, reviewScores: [], leads: [], warningAt: ago(31) }).warningDaysLeft, 0);
 console.log('✓ matching formula matches the Google Sheet (16 checks)');
-console.log('✓ agent standing rules (9 checks)');
+// A brand-new lead (matched today, not contacted yet) doesn't count against staying in touch
+const fresh = computeStanding({ now, reviewScores: [], leads: [
+  { status: 'active', matchedAt: ago(30), contactedAt: ago(29.9), lastTouchAt: ago(1) },
+  { status: 'active', matchedAt: ago(0.1) },
+] });
+assert.equal(fresh.status, 'good');
+console.log('✓ agent standing rules (14 checks)');
 
 // ---- Sales insights
 const L = (id: string, agentId: string, req: string[], d: number) => ({ matchId: id, agentId, agentName: agentId, matchedAt: ago(d), requested: req, status: 'active' as const });

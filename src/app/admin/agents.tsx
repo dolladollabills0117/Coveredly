@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { STANDARDS } from '../../../supabase/functions/_shared/standing';
-import { STANDING_LABEL } from '../../components/StandingCard';
+import { HalfCircle, STANDING_LABEL } from '../../components/StandingCard';
 import { Body, Button, Card, Eyebrow, H1, H2, H3, Pill, Row, Screen, Small, Toggle } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/backend';
@@ -79,7 +79,8 @@ export default function Agents() {
 function AgentCard({ a }: { a: AdminAgent }) {
   const s = a.standing;
   const l = STANDING_LABEL[s.status];
-  const failing = s.checks.filter((c) => !c.ok);
+  const failing = s.checks.filter((c) => !c.ok && c.kind === 'standing');
+  const inProgress = s.checks.filter((c) => !c.ok && c.kind === 'progress');
   const [writing, setWriting] = useState(false);
   const [reason, setReason] = useState('');
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -122,8 +123,14 @@ function AgentCard({ a }: { a: AdminAgent }) {
         {s.status === 'warning' && !!s.warningReason && <Small style={{ color: colors.ink }}>Notice sent {timeAgo(s.warningAt)}: {s.warningReason}</Small>}
         {failing.map((c) => (
           <Row key={c.id} gap={2} style={{ alignItems: 'flex-start' }}>
-            <Ionicons name="alert-circle" size={16} color={colors.orange} style={{ marginTop: 2 }} />
+            <Ionicons name="alert-circle" size={16} color={colors.red} style={{ marginTop: 2 }} />
             <Small style={{ flex: 1, color: colors.ink }}>{c.label}: {c.value}</Small>
+          </Row>
+        ))}
+        {inProgress.map((c) => (
+          <Row key={c.id} gap={2} style={{ alignItems: 'flex-start' }}>
+            <View style={{ marginTop: 2 }}><HalfCircle size={14} /></View>
+            <Small style={{ flex: 1 }}>In progress, {c.label.toLowerCase()}: {c.value}</Small>
           </Row>
         ))}
         {failing.length === 0 && s.status !== 'removed' && <Small>Meeting every standard.</Small>}

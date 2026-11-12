@@ -4,11 +4,12 @@ import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { MilestoneTimeline } from '../../components/Milestones';
 import { Sheet } from '../../components/Sheet';
-import { Body, Button, Card, Checkbox, Divider, Eyebrow, Field, H1, H3, Pill, Row, Screen, Small, Stars, tap } from '../../components/ui';
+import { Body, Button, Card, Checkbox, Divider, Eyebrow, Field, H1, H3, Pill, Row, Screen, Small, Stars, tap, Toggle } from '../../components/ui';
 import { LEAD_REPLACEMENT_POLICY } from '../../config/leadReplacementPolicy';
 import { api } from '../../lib/backend';
 import { timeAgo, useLive } from '../../lib/hooks';
 import { colors, fonts, radius, space } from '../../lib/theme';
+import { STANDARDS } from '../../../supabase/functions/_shared/standing';
 import { lineLabel, SALE_LINES, type LeadRating } from '../../lib/types';
 
 export default function LeadDetail() {
@@ -115,6 +116,26 @@ export default function LeadDetail() {
           <Small style={{ marginTop: space(4) }}>Waiting on {p?.fullName?.split(' ')[0]}'s review. We've nudged them. Ask them to tap "Leave a review" in their app.</Small>
         )}
       </Card>
+
+      {!locked && (
+        <Card style={{ marginTop: space(4) }}>
+          <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ flex: 1, gap: 4 }}>
+              <H3>Long-term lead</H3>
+              <Small>
+                For someone shopping around, or a longer sale like life insurance. Long-term leads don&apos;t count toward your sales numbers,
+                and a check-in every {STANDARDS.followUpDays * 2} days keeps the relationship warm.
+              </Small>
+              {!m.longTerm && (q?.timing === 'Just looking around' || q?.timing === 'In 1 to 3 months' || q?.coverage.includes('Life')) && (
+                <Small style={{ color: colors.orange, marginTop: 2 }}>
+                  {q?.coverage.includes('Life') ? 'They asked about life insurance.' : `They said "${q?.timing}".`} This might be a good fit.
+                </Small>
+              )}
+            </View>
+            <Toggle value={!!m.longTerm} onValueChange={(v) => api.setLongTerm(m.id, v)} />
+          </Row>
+        </Card>
+      )}
 
       <Card style={{ marginTop: space(4) }}>
         <H3 style={{ marginBottom: space(3) }}>How they like to work</H3>

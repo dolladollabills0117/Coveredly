@@ -72,7 +72,7 @@ async function hydrate(rows: any[]): Promise<Match[]> {
     (['call', 'quote', 'sold', 'review'] as MilestoneKey[]).forEach((k) => { if (r['m_' + k]) milestones[k] = r['m_' + k]; });
     return {
       id: r.id, policyholderId: r.policyholder_id, agentId: r.agent_id, score: Number(r.score), matchedBy: r.matched_by, status: r.status,
-      createdAt: r.approved_at ?? r.created_at, contactedAt: r.contacted_at ?? undefined, establishedAt: r.established_at ?? undefined, milestones, fit: r.fit ?? undefined,
+      createdAt: r.approved_at ?? r.created_at, contactedAt: r.contacted_at ?? undefined, establishedAt: r.established_at ?? undefined, milestones, fit: r.fit ?? undefined, longTerm: !!r.long_term,
       sales: (salesRes.data ?? []).filter((x: any) => x.match_id === r.id).map((x: any) => ({ id: x.id, matchId: x.match_id, line: x.line, soldAt: x.sold_at })),
       policyholder: pp && ph ? { fullName: pp.full_name, email: pp.email, phone: pp.phone ?? undefined, quiz: { ...phFromRow(ph), fullName: pp.full_name } } : undefined,
       agent: ap ? { fullName: ap.full_name, email: ap.email, phone: ap.phone ?? undefined, contactMethod: ag?.contact_method ?? '', languages: ag?.languages ?? [] } : undefined,
@@ -91,7 +91,7 @@ async function standingsFor(agentIds: string[]) {
   const s = supabaseClient();
   const [agents, matches, ratings, messages, reviews] = await Promise.all([
     s.from('agents').select('user_id, warning_at, warning_reason, removed_at').in('user_id', agentIds),
-    s.from('matches').select('id, agent_id, status, approved_at, created_at, contacted_at, m_call, m_quote, m_sold').in('agent_id', agentIds),
+    s.from('matches').select('id, agent_id, status, approved_at, created_at, contacted_at, m_call, m_quote, m_sold, long_term').in('agent_id', agentIds),
     s.from('lead_ratings').select('match_id, created_at').in('agent_id', agentIds),
     s.from('messages').select('match_id, sender_id, created_at').in('sender_id', agentIds),
     s.from('reviews').select('match_id, ease'),
@@ -100,7 +100,7 @@ async function standingsFor(agentIds: string[]) {
     const a: any = (agents.data ?? []).find((x: any) => x.user_id === id);
     const mine = (matches.data ?? []).filter((m: any) => m.agent_id === id);
     const leads: StandingLead[] = mine.map((m: any) => ({
-      status: m.status, matchedAt: m.approved_at ?? m.created_at, contactedAt: m.contacted_at ?? m.m_call ?? undefined, soldAt: m.m_sold ?? undefined,
+      status: m.status, matchedAt: m.approved_at ?? m.created_at, contactedAt: m.contacted_at ?? m.m_call ?? undefined, soldAt: m.m_sold ?? undefined, longTerm: !!m.long_term,
       lastTouchAt: latest(m.contacted_at, m.m_call, m.m_quote, m.m_sold,
         ...(messages.data ?? []).filter((x: any) => x.match_id === m.id && x.sender_id === id).map((x: any) => x.created_at),
         ...(ratings.data ?? []).filter((r: any) => r.match_id === m.id).map((r: any) => r.created_at)),
@@ -181,10 +181,11 @@ export const supabaseBackend: Backend = {
   async markContacted(mid) { ok(await supabaseClient().rpc('mark_contacted', { mid })); },
   async logMilestone(mid, k) { ok(await supabaseClient().rpc('log_milestone', { mid, k })); },
   async logSale(mid, lines) { ok(await supabaseClient().rpc('log_sale', { mid, p_lines: lines })); },
+  async setLongTerm(mid, longTerm) { ok(await supabaseClient().rpc('set_long_term', { mid, p_long_term: longTerm })); },
   async getInsightsData() {
     const s = supabaseClient();
     const [matches, phs, sales, names] = await Promise.all([
-      s.from('matches').select('id, agent_id, policyholder_id, status, approved_at, created_at').in('status', ['active', 'established', 'reported', 'replaced']),
+      s.from('matches').select('id, agent_id, policyholder_id, status, approved_at, created_at, long_term').in('status', ['active', 'established', 'reported', 'replaced']),
       s.from('policyholders').select('user_id, coverage'),
       s.from('policy_sales').select('match_id, agent_id, line, sold_at'),
       s.from('profiles').select('id, full_name').eq('role', 'agent'),
@@ -193,12 +194,12 @@ export const supabaseBackend: Backend = {
     const ms = matches.data ?? [];
     return {
       leads: ms.filter((m: any) => m.agent_id).map((m: any) => ({
-        matchId: m.id, agentId: m.agent_id, agentName: nameOf(m.agent_id), matchedAt: m.approved_at ?? m.created_at, status: m.status,
+        matchId: m.id, agentId: m.agent_id, agentName: nameOf(m.agent_id), matchedAt: m.approved_at ?? m.created_at, status: m.status, longTerm: !!m.long_term,
         requested: (phs.data ?? []).find((p: any) => p.user_id === m.policyholder_id)?.coverage ?? [],
       })),
       sales: (sales.data ?? []).flatMap((x: any) => {
         const m: any = ms.find((y: any) => y.id === x.match_id);
-        return m ? [{ matchId: x.match_id, agentId: x.agent_id, agentName: nameOf(x.agent_id), line: x.line, matchedAt: m.approved_at ?? m.created_at, soldAt: x.sold_at }] : [];
+        return m ? [{ matchId: x.match_id, agentId: x.agent_id, agentName: nameOf(x.agent_id), line: x.line, matchedAt: m.approved_at ?? m.created_at, soldAt: x.sold_at, longTerm: !!m.long_term }] : [];
       }),
     };
   },

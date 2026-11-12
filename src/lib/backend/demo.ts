@@ -36,7 +36,7 @@ interface DB {
   session: string | null;
 }
 
-const KEY = 'coveredly-demo-v6';
+const KEY = 'coveredly-demo-v7';
 const AUTO_APPROVE = false; // mirrors the sheet: admin approves every match by hand
 const now = () => new Date().toISOString();
 const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
@@ -101,7 +101,7 @@ function seed(): DB {
       milestones: { call: ago(60 * 24 - 2), quote: ago(57 * 24), sold: ago(48 * 24), review: ago(46 * 24) }, establishedAt: ago(46 * 24) },
     { id: 'm7', policyholderId: 'u-ph8', agentId: 'u-ag1', score: 88.3, matchedBy: 'Formula', status: 'established', createdAt: ago(110 * 24), contactedAt: ago(110 * 24 - 5),
       milestones: { call: ago(109 * 24), quote: ago(100 * 24), sold: ago(69 * 24), review: ago(66 * 24) }, establishedAt: ago(66 * 24) },
-    { id: 'm8', policyholderId: 'u-ph9', agentId: 'u-ag2', score: 81.7, matchedBy: 'Formula', status: 'established', createdAt: ago(150 * 24), contactedAt: ago(150 * 24 - 20),
+    { id: 'm8', policyholderId: 'u-ph9', agentId: 'u-ag2', score: 81.7, matchedBy: 'Formula', status: 'established', longTerm: true, createdAt: ago(150 * 24), contactedAt: ago(150 * 24 - 20),
       milestones: { call: ago(149 * 24), quote: ago(120 * 24), sold: ago(53 * 24), review: ago(50 * 24) }, establishedAt: ago(50 * 24) },
   ];
   const seeded = {
@@ -180,6 +180,7 @@ function standingFor(d: DB, agentId: string): Standing {
   return computeStanding({
     leads: mine.map((m) => ({
       status: m.status, matchedAt: m.createdAt, contactedAt: m.contactedAt ?? m.milestones.call, soldAt: m.milestones.sold,
+      longTerm: !!m.longTerm,
       lastTouchAt: latest(m.contactedAt, m.milestones.call, m.milestones.quote, m.milestones.sold,
         ...d.messages.filter((x) => x.matchId === m.id && x.senderId === agentId).map((x) => x.createdAt),
         ...d.ratings.filter((r) => r.matchId === m.id).map((r) => r.createdAt)),
@@ -418,6 +419,14 @@ export const demoBackend: Backend = {
     }
     await save();
   },
+  async setLongTerm(matchId, longTerm) {
+    const d = await load(); const u = await me();
+    const m = d.matches.find((x) => x.id === matchId && x.agentId === u.id);
+    if (!m || !!m.longTerm === longTerm) return;
+    m.longTerm = longTerm;
+    log(d, 'milestone', u.fullName, `${u.fullName} ${longTerm ? 'marked' : 'unmarked'} ${nameOf(d, m.policyholderId)} as a long-term lead`, m.id);
+    await save();
+  },
   async logSale(matchId, lines) {
     const d = await load(); const u = await me();
     const m = d.matches.find((x) => x.id === matchId && x.agentId === u.id);
@@ -443,11 +452,11 @@ export const demoBackend: Backend = {
     return {
       leads: counted.map((m) => ({
         matchId: m.id, agentId: m.agentId, agentName: nameOf(d, m.agentId), matchedAt: m.createdAt, status: m.status,
-        requested: d.policyholders.find((p) => p.userId === m.policyholderId)?.coverage ?? [],
+        requested: d.policyholders.find((p) => p.userId === m.policyholderId)?.coverage ?? [], longTerm: !!m.longTerm,
       })),
       sales: d.sales.flatMap((s) => {
         const m = d.matches.find((x) => x.id === s.matchId);
-        return m ? [{ matchId: s.matchId, agentId: m.agentId, agentName: nameOf(d, m.agentId), line: s.line, matchedAt: m.createdAt, soldAt: s.soldAt }] : [];
+        return m ? [{ matchId: s.matchId, agentId: m.agentId, agentName: nameOf(d, m.agentId), line: s.line, matchedAt: m.createdAt, soldAt: s.soldAt, longTerm: !!m.longTerm }] : [];
       }),
     };
   },

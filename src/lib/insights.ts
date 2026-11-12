@@ -24,6 +24,9 @@ export interface LineStats {
   requested: number; // leads (in range) that asked for this line
   requestedAndSold: number; // ...that bought this line
   closeRate: number | null;
+  /** Sales on leads the agent marked long-term (shopping around, or a longer sale like life). */
+  longTermSold: number;
+  longTermAvgDays: number | null;
   /** Days within which 80% of this line's sales closed, rounded up to 5. Null until there's enough data. */
   suggestedWindow: number | null;
 }
@@ -62,12 +65,14 @@ export function computeInsights(data: InsightsData, opts: { range: Range; agentI
 
   const lines: LineStats[] = INSIGHT_LINES.map((line) => {
     const days = sales.filter((s) => s.line === line).map((s) => daysBetween(s.matchedAt, s.soldAt)).sort((a, b) => a - b);
+    const ltDays = sales.filter((s) => s.line === line && s.longTerm).map((s) => daysBetween(s.matchedAt, s.soldAt));
     const asked = leads.filter((l) => l.requested.includes(line));
     const bought = asked.filter((l) => (allSalesByMatch.get(l.matchId) ?? []).includes(line));
     const p80 = percentile(days, 0.8);
     return {
       line, sold: days.length, avgDays: avg(days), medianDays: median(days),
       fastestDays: days.length ? days[0] : null, slowestDays: days.length ? days[days.length - 1] : null,
+      longTermSold: ltDays.length, longTermAvgDays: avg(ltDays),
       requested: asked.length, requestedAndSold: bought.length, closeRate: asked.length ? bought.length / asked.length : null,
       suggestedWindow: days.length >= MIN_SALES_FOR_SUGGESTION && p80 !== null ? Math.max(5, Math.ceil(p80 / 5) * 5) : null,
     };
