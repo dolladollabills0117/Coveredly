@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { LowFitCard } from '../../components/LowFitCard';
 import { MilestoneDots, progressOf } from '../../components/Milestones';
-import { Body, Card, Eyebrow, H1, H2, H3, IconBubble, Pill, Row, Screen, Small } from '../../components/ui';
+import { Body, Card, Eyebrow, H2, H3, IconBubble, Pill, Row, Screen, Small } from '../../components/ui';
 import { POLICY_TYPES } from '../../config/policies';
 import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/backend';

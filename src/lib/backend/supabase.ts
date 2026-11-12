@@ -216,6 +216,28 @@ export const supabaseBackend: Backend = {
     const rows = ok(await supabaseClient().from('activity').select('*').order('created_at', { ascending: false }).limit(200));
     return (rows ?? []).map((a: any) => ({ id: a.id, type: a.type, matchId: a.match_id, actorName: a.actor_name, text: a.text, createdAt: a.created_at }));
   },
+  async listPolicyholders() {
+    const s = supabaseClient();
+    const [profiles, phs, matches, agents] = await Promise.all([
+      s.from('profiles').select('id, full_name, email, phone, created_at').eq('role', 'policyholder').order('created_at', { ascending: false }),
+      s.from('policyholders').select('*'),
+      s.from('matches').select('*').order('created_at', { ascending: false }),
+      s.from('profiles').select('id, full_name').eq('role', 'agent'),
+    ]);
+    const open = ['low_fit', 'waiting', 'pending_approval', 'active', 'established'];
+    return (profiles.data ?? []).map((p: any) => {
+      const q = (phs.data ?? []).find((x: any) => x.user_id === p.id);
+      const mine = (matches.data ?? []).filter((m: any) => m.policyholder_id === p.id);
+      const m: any = mine.find((x: any) => open.includes(x.status)) ?? mine[0];
+      return {
+        id: p.id, fullName: p.full_name, email: p.email, phone: p.phone ?? undefined, joinedAt: p.created_at,
+        quiz: q ? { ...phFromRow(q), fullName: p.full_name } : undefined,
+        matchStatus: m ? m.status : 'none', matchId: m?.id, score: m && Number(m.score) >= 0 ? Number(m.score) : undefined,
+        agentName: (agents.data ?? []).find((a: any) => a.id === m?.agent_id)?.full_name,
+        milestonesDone: m ? ['m_call', 'm_quote', 'm_sold', 'm_review'].filter((k) => m[k]).length : 0,
+      };
+    });
+  },
   async listAgents() {
     const s = supabaseClient();
     const [agents, profiles, matches] = await Promise.all([

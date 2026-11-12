@@ -15,7 +15,8 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function Shell() {
   const { user } = useAuth();
-  useEffect(() => { if (user) registerForPush(user.id).catch(() => {}); }, [user?.id]);
+  const userId = user?.id;
+  useEffect(() => { if (userId) registerForPush(userId).catch(() => {}); }, [userId]);
   return (
     <>
       <StatusBar style="dark" />

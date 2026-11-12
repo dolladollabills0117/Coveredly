@@ -136,6 +136,22 @@ export interface PendingMatch {
   candidates: { agentId: string; name: string; score: number; reasons: string[] }[];
 }
 
+/** Admin view of one policyholder and where they are in matching. */
+export interface AdminPolicyholder {
+  id: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  joinedAt?: string;
+  quiz?: PolicyholderQuiz; // undefined = signed up but hasn't finished the quiz
+  /** none = quiz done but never asked for a match */
+  matchStatus: MatchStatus | 'none';
+  matchId?: string;
+  score?: number;
+  agentName?: string;
+  milestonesDone?: number;
+}
+
 export interface AdminAgent {
   id: string;
   fullName: string;
@@ -190,6 +206,7 @@ export interface Backend {
   resolveReport(reportId: string, approve: boolean): Promise<void>;
   listActivity(): Promise<Activity[]>;
   listAgents(): Promise<AdminAgent[]>;
+  listPolicyholders(): Promise<AdminPolicyholder[]>;
   setAgentVerified(agentId: string, verified: boolean): Promise<void>;
 
   // Agent plans & payment

@@ -14,19 +14,6 @@ export default function Welcome() {
   if (user === undefined) return null;
   if (user) return <Redirect href={homeFor(user)} />;
 
-  const Path = ({ role, icon, title, body }: { role: 'policyholder' | 'agent'; icon: any; title: string; body: string }) => (
-    <Pressable onPress={() => { tap(); router.push({ pathname: '/auth', params: { role } }); }}
-      style={({ pressed }) => [st.path, role === 'agent' && st.pathDark, pressed && { transform: [{ scale: 0.98 }] }]}>
-      <View style={[st.icon, role === 'agent' && { backgroundColor: '#2A2A2A' }]}>
-        <Ionicons name={icon} size={24} color={colors.orange} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <H3 style={role === 'agent' ? { color: colors.white } : undefined}>{title}</H3>
-        <Small style={role === 'agent' ? { color: '#BDB3A9' } : undefined}>{body}</Small>
-      </View>
-      <Ionicons name="arrow-forward" size={20} color={role === 'agent' ? colors.white : colors.ink} />
-    </Pressable>
-  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.peach }}>
@@ -49,6 +36,22 @@ export default function Welcome() {
         </View>
       </View>
     </SafeAreaView>
+  );
+}
+
+function Path({ role, icon, title, body }: { role: 'policyholder' | 'agent'; icon: any; title: string; body: string }) {
+  return (
+    <Pressable onPress={() => { tap(); router.push({ pathname: '/auth', params: { role } }); }}
+      style={({ pressed }) => [st.path, role === 'agent' && st.pathDark, pressed && { transform: [{ scale: 0.98 }] }]}>
+      <View style={[st.icon, role === 'agent' && { backgroundColor: '#2A2A2A' }]}>
+        <Ionicons name={icon} size={24} color={colors.orange} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <H3 style={role === 'agent' ? { color: colors.white } : undefined}>{title}</H3>
+        <Small style={role === 'agent' ? { color: '#BDB3A9' } : undefined}>{body}</Small>
+      </View>
+      <Ionicons name="arrow-forward" size={20} color={role === 'agent' ? colors.white : colors.ink} />
+    </Pressable>
   );
 }
 

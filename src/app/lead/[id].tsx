@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { MilestoneTimeline } from '../../components/Milestones';
 import { Sheet } from '../../components/Sheet';
-import { Body, Button, Card, Divider, Eyebrow, Field, H1, H3, IconBubble, Pill, Row, Screen, Small, Stars, tap } from '../../components/ui';
+import { Body, Button, Card, Divider, Eyebrow, Field, H1, H3, Pill, Row, Screen, Small, Stars, tap } from '../../components/ui';
 import { LEAD_REPLACEMENT_POLICY } from '../../config/leadReplacementPolicy';
 import { api } from '../../lib/backend';
 import { timeAgo, useLive } from '../../lib/hooks';

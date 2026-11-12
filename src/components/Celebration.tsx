@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Dimensions, Easing, Modal, Platform, StyleSheet, View } from 'react-native';
 import { api } from '../lib/backend';
 import { useLive } from '../lib/hooks';
@@ -11,18 +11,26 @@ import { Body, Button, H1 } from './ui';
 
 const CONFETTI = [colors.orange, '#FFB766', colors.ink, '#FFD6AE', colors.green, '#FF9F45'];
 
+type Piece = { x: number; delay: number; duration: number; size: number; color: string; spin: number; drift: number; round: boolean; anim: Animated.Value };
+
+function makePieces(): Piece[] {
+  const { width } = Dimensions.get('window');
+  return Array.from({ length: 70 }, (_, i) => ({
+    x: Math.random() * width, delay: Math.random() * 600, duration: 2600 + Math.random() * 1200, size: 6 + Math.random() * 8,
+    color: CONFETTI[i % CONFETTI.length], spin: Math.random() > 0.5 ? 1 : -1, drift: (Math.random() - 0.5) * 120,
+    round: Math.random() > 0.6, anim: new Animated.Value(0),
+  }));
+}
+
 function Confetti() {
-  const { width, height } = Dimensions.get('window');
-  const pieces = useMemo(() => Array.from({ length: 70 }, (_, i) => ({
-    x: Math.random() * width, delay: Math.random() * 600, size: 6 + Math.random() * 8,
-    color: CONFETTI[i % CONFETTI.length], spin: Math.random() > 0.5 ? 1 : -1, drift: (Math.random() - 0.5) * 120, round: Math.random() > 0.6,
-  })), [width]);
-  const anims = useRef(pieces.map(() => new Animated.Value(0))).current;
+  // Random layout is generated once, when the confetti first mounts.
+  const [pieces] = useState(makePieces);
+  const { height } = Dimensions.get('window');
   useEffect(() => {
-    Animated.stagger(12, anims.map((a, i) => Animated.timing(a, {
-      toValue: 1, duration: 2600 + Math.random() * 1200, delay: pieces[i].delay, easing: Easing.out(Easing.quad), useNativeDriver: true,
+    Animated.stagger(12, pieces.map((p) => Animated.timing(p.anim, {
+      toValue: 1, duration: p.duration, delay: p.delay, easing: Easing.out(Easing.quad), useNativeDriver: true,
     }))).start();
-  }, []);
+  }, [pieces]);
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {pieces.map((p, i) => (
@@ -30,9 +38,9 @@ function Confetti() {
           position: 'absolute', left: p.x, top: -20, width: p.size, height: p.round ? p.size : p.size * 0.45,
           borderRadius: p.round ? p.size : 2, backgroundColor: p.color,
           transform: [
-            { translateY: anims[i].interpolate({ inputRange: [0, 1], outputRange: [0, height + 40] }) },
-            { translateX: anims[i].interpolate({ inputRange: [0, 1], outputRange: [0, p.drift] }) },
-            { rotate: anims[i].interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${p.spin * 720}deg`] }) },
+            { translateY: p.anim.interpolate({ inputRange: [0, 1], outputRange: [0, height + 40] }) },
+            { translateX: p.anim.interpolate({ inputRange: [0, 1], outputRange: [0, p.drift] }) },
+            { rotate: p.anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${p.spin * 720}deg`] }) },
           ],
         }} />
       ))}
@@ -43,26 +51,27 @@ function Confetti() {
 /** Watches for new "Established" notifications and throws a party on whichever side is signed in. */
 export function CelebrationHost() {
   const { data } = useLive(() => api.listNotifications().catch(() => [] as AppNotification[]));
-  const [current, setCurrent] = useState<AppNotification | null>(null);
-  const scale = useRef(new Animated.Value(0.6)).current;
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const [scale] = useState(() => new Animated.Value(0.6));
+  const current = data?.find((n) => n.kind === 'established' && !n.read && !dismissed.includes(n.id)) ?? null;
+  const currentId = current?.id;
 
+  // Side effects only (no state updates): buzz, system notification and pop-in animation, once per celebration.
   useEffect(() => {
-    const next = data?.find((n) => n.kind === 'established' && !n.read);
-    if (next && next.id !== current?.id) {
-      setCurrent(next);
-      localNotify(next.title, next.body);
-      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      scale.setValue(0.6);
-      Animated.spring(scale, { toValue: 1, friction: 5, useNativeDriver: true }).start();
-    }
-  }, [data]);
+    if (!current) return;
+    localNotify(current.title, current.body);
+    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    scale.setValue(0.6);
+    Animated.spring(scale, { toValue: 1, friction: 5, useNativeDriver: true }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the id so data refreshes don't replay it
+  }, [currentId, scale]);
 
   if (!current) return null;
-  const close = async () => { await api.markNotificationRead(current.id); setCurrent(null); };
+  const close = async () => { setDismissed((d) => [...d, current.id]); await api.markNotificationRead(current.id); };
   return (
     <Modal transparent animationType="fade" visible onRequestClose={close}>
       <View style={st.backdrop}>
-        <Confetti />
+        <Confetti key={current.id} />
         <Animated.View style={[st.card, { transform: [{ scale }] }]}>
           <View style={st.badge}><Ionicons name="heart" size={40} color={colors.white} /></View>
           <H1 style={{ textAlign: 'center' }}>{current.title}</H1>

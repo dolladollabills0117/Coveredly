@@ -6,7 +6,7 @@ import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/backend';
 import { timeAgo, useLive } from '../../lib/hooks';
 import { usePrefs } from '../../lib/prefs';
-import { colors, space } from '../../lib/theme';
+import { space } from '../../lib/theme';
 
 export default function Agents() {
   const { data } = useLive(() => api.listAgents());

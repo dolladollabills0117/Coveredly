@@ -14,7 +14,7 @@ import { colors, fonts, radius, space } from '../lib/theme';
 export default function ChoosePlan() {
   const { user, refresh, signOut } = useAuth();
   const { data: founding, reload } = useLive(() => api.getMyFoundingRequest(), [user?.id]);
-  const [selected, setSelected] = useState<PlanId>('dialogue');
+  const [picked, setPicked] = useState<PlanId | null>(null);
   const [code, setCode] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -22,12 +22,13 @@ export default function ChoosePlan() {
 
   // While Stripe checkout is open, watch for the webhook to activate the plan.
   useEffect(() => api.subscribe(() => { refresh(); }), [refresh]);
-  useEffect(() => { if (founding?.status === 'redeemed') setSelected('founding'); }, [founding?.status]);
 
   if (!user) return null;
   if (user.role !== 'agent') return <Redirect href="/" />;
   if (user.plan?.status === 'active') return <Redirect href="/agent" />;
 
+  // Default to the founding plan once the code is validated, otherwise Dialogue.
+  const selected: PlanId = picked ?? (founding?.status === 'redeemed' ? 'founding' : 'dialogue');
   const plan = [...PLANS, FOUNDING_PLAN].find((p) => p.id === selected)!;
   const run = async (key: string, fn: () => Promise<void>) => {
     setErr(''); setBusy(key);
@@ -46,27 +47,6 @@ export default function ChoosePlan() {
     }
   });
 
-  const PlanCard = ({ p }: { p: Plan }) => {
-    const on = selected === p.id;
-    return (
-      <Pressable onPress={() => { tap(); setSelected(p.id); }} style={[st.plan, on && st.planOn, p.id === 'founding' && { borderColor: on ? colors.orange : colors.ink }]}>
-        <Row style={{ justifyContent: 'space-between' }}>
-          <Row gap={2}>
-            <Ionicons name={on ? 'radio-button-on' : 'radio-button-off'} size={22} color={on ? colors.orange : colors.inkSoft} />
-            <H3>{p.name}</H3>
-          </Row>
-          {p.badge && <Pill label={p.badge} tone={p.id === 'founding' ? 'dark' : 'orange'} />}
-        </Row>
-        <Row style={{ alignItems: 'flex-end', marginTop: space(3) }} gap={1}>
-          <H1 style={{ fontSize: 38, lineHeight: 42 }}>${p.price}</H1>
-          <Small style={{ marginBottom: 6 }}>/month</Small>
-        </Row>
-        <Body style={{ fontFamily: fonts.semibold, marginTop: 2 }}>Up to {p.leads} matched leads a month</Body>
-        <Small style={{ marginTop: 4 }}>{p.blurb}</Small>
-        <Small style={{ marginTop: 6, color: colors.orange }}>≈ ${Math.round(p.price / p.leads)} per lead{p.id === 'founding' ? ' · locked in for life' : ''}</Small>
-      </Pressable>
-    );
-  };
 
   if (waiting) {
     return (
@@ -91,8 +71,8 @@ export default function ChoosePlan() {
       </Body>
 
       <View style={{ gap: space(3) }}>
-        {founding?.status === 'redeemed' && <PlanCard p={FOUNDING_PLAN} />}
-        {PLANS.map((p) => <PlanCard key={p.id} p={p} />)}
+        {founding?.status === 'redeemed' && <PlanCard p={FOUNDING_PLAN} on={selected === 'founding'} onPick={setPicked} />}
+        {PLANS.map((p) => <PlanCard key={p.id} p={p} on={selected === p.id} onPick={setPicked} />)}
       </View>
 
       {!!err && <Small style={{ color: colors.red, marginTop: space(4) }}>{err}</Small>}
@@ -138,6 +118,27 @@ export default function ChoosePlan() {
         <Small>Sign out</Small>
       </Pressable>
     </Screen>
+  );
+}
+
+function PlanCard({ p, on, onPick }: { p: Plan; on: boolean; onPick: (id: PlanId) => void }) {
+  return (
+    <Pressable onPress={() => { tap(); onPick(p.id); }} style={[st.plan, on && st.planOn, p.id === 'founding' && { borderColor: on ? colors.orange : colors.ink }]}>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <Row gap={2}>
+          <Ionicons name={on ? 'radio-button-on' : 'radio-button-off'} size={22} color={on ? colors.orange : colors.inkSoft} />
+          <H3>{p.name}</H3>
+        </Row>
+        {p.badge && <Pill label={p.badge} tone={p.id === 'founding' ? 'dark' : 'orange'} />}
+      </Row>
+      <Row style={{ alignItems: 'flex-end', marginTop: space(3) }} gap={1}>
+        <H1 style={{ fontSize: 38, lineHeight: 42 }}>${p.price}</H1>
+        <Small style={{ marginBottom: 6 }}>/month</Small>
+      </Row>
+      <Body style={{ fontFamily: fonts.semibold, marginTop: 2 }}>Up to {p.leads} matched leads a month</Body>
+      <Small style={{ marginTop: 4 }}>{p.blurb}</Small>
+      <Small style={{ marginTop: 6, color: colors.orange }}>≈ ${Math.round(p.price / p.leads)} per lead{p.id === 'founding' ? ' · locked in for life' : ''}</Small>
+    </Pressable>
   );
 }
 

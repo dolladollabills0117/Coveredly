@@ -28,12 +28,12 @@ export function Screen({ children, scroll = true, style, edges = ['top'] }: {
   );
 }
 
-type TextProps = { children: ReactNode; style?: StyleProp<TextStyle>; numberOfLines?: number };
+type TextProps = { children: ReactNode; style?: StyleProp<TextStyle>; numberOfLines?: number; selectable?: boolean };
 export const H1 = ({ children, style }: TextProps) => <Text style={[s.h1, style]}>{children}</Text>;
 export const H2 = ({ children, style }: TextProps) => <Text style={[s.h2, style]}>{children}</Text>;
 export const H3 = ({ children, style, numberOfLines }: TextProps) => <Text numberOfLines={numberOfLines} style={[s.h3, style]}>{children}</Text>;
-export const Body = ({ children, style, numberOfLines }: TextProps) => <Text numberOfLines={numberOfLines} style={[s.body, style]}>{children}</Text>;
-export const Small = ({ children, style, numberOfLines }: TextProps) => <Text numberOfLines={numberOfLines} style={[s.small, style]}>{children}</Text>;
+export const Body = ({ children, style, numberOfLines, selectable }: TextProps) => <Text selectable={selectable} numberOfLines={numberOfLines} style={[s.body, style]}>{children}</Text>;
+export const Small = ({ children, style, numberOfLines, selectable }: TextProps) => <Text selectable={selectable} numberOfLines={numberOfLines} style={[s.small, style]}>{children}</Text>;
 export const Eyebrow = ({ children, style }: TextProps) => <Text style={[s.eyebrow, style]}>{children}</Text>;
 
 export function Button({ title, onPress, variant = 'primary', icon, loading, disabled, style, small }: {

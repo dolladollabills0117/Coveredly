@@ -6,7 +6,7 @@ export function useLive<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   const [data, setData] = useState<T | undefined>();
   const [error, setError] = useState<string | null>(null);
   const fnRef = useRef(fn);
-  fnRef.current = fn;
+  useEffect(() => { fnRef.current = fn; });
   const reload = useCallback(() => {
     fnRef.current().then((d) => { setData(d); setError(null); }).catch((e) => setError(String(e?.message ?? e)));
   }, []);

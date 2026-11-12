@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, fonts, radius, space } from '../lib/theme';
@@ -24,7 +24,7 @@ export function Quiz({ eyebrow, questions, onDone, gate }: {
   const [other, setOther] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [stopped, setStopped] = useState<{ title: string; body: string } | null>(null);
-  const fade = useRef(new Animated.Value(1)).current;
+  const [fade] = useState(() => new Animated.Value(1));
   const q = questions[i];
 
   const valueOf = (qq: Question): string | string[] | undefined => a[qq.id];

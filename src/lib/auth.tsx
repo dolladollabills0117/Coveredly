@@ -14,7 +14,11 @@ const Ctx = createContext<AuthCtx>(null as any);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const refresh = useCallback(async () => setUser(await api.getUser().catch(() => null)), []);
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    let alive = true;
+    api.getUser().catch(() => null).then((u) => { if (alive) setUser(u); });
+    return () => { alive = false; };
+  }, []);
   return (
     <Ctx.Provider value={{
       user, refresh,

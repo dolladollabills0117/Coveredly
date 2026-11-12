@@ -12,8 +12,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fitSummary, GOOD_MATCH_THRESHOLD, rankAgents, type AgentProfile } from '../../../supabase/functions/_shared/matching';
 import { planById, type PlanId } from '../../config/plans';
 import type {
-  Activity, ActivityType, AdminAgent, AgentQuiz, AppNotification, Backend, FoundingRequest, LeadRating, LeadReport, Match,
-  Message, MilestoneKey, PendingMatch, PolicyholderQuiz, Review, Role, User,
+  Activity, ActivityType, AdminAgent, AdminPolicyholder, AppNotification, Backend, FoundingRequest, LeadRating, LeadReport, Match,
+  Message, PendingMatch, PolicyholderQuiz, Review, Role, User,
 } from '../types';
 import { AGENT_VISIBLE, OPEN_FOR_POLICYHOLDER } from '../types';
 
@@ -487,6 +487,20 @@ export const demoBackend: Backend = {
   },
   async listActivity() {
     return (await load()).activity;
+  },
+  async listPolicyholders(): Promise<AdminPolicyholder[]> {
+    const d = await load();
+    return d.users.filter((u) => u.role === 'policyholder').map((u) => {
+      const quiz = d.policyholders.find((p) => p.userId === u.id);
+      const mine = d.matches.filter((m) => m.policyholderId === u.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      const m = mine.find((x) => OPEN_FOR_POLICYHOLDER.includes(x.status)) ?? mine[0];
+      return {
+        id: u.id, fullName: u.fullName, email: u.email, phone: quiz?.phone ?? u.phone, quiz,
+        matchStatus: m ? m.status : 'none', matchId: m?.id, score: m && m.score >= 0 ? m.score : undefined,
+        agentName: m?.agentId ? nameOf(d, m.agentId) : undefined,
+        milestonesDone: m ? Object.keys(m.milestones).length : 0,
+      };
+    });
   },
   async listAgents(): Promise<AdminAgent[]> {
     const d = await load();
