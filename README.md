@@ -1,5 +1,7 @@
 # Coveredly app (iOS + Android)
 
+**▶ Live demo:** https://dolladollabills0117.github.io/Coveredly/ (sample data, works on any phone or computer; log in as `agent@demo.com`, `policyholder@demo.com` or `admin@getcoveredly.com` with any password)
+
 One app, two sides:
 
 - **Policyholders** take the quiz, see a profile with the personal-lines policies they may need, tap any policy for a short explainer, then **Find your agent match** or **Message your agent**.
@@ -132,3 +134,18 @@ src/config/              all editable copy (policies, tips, quiz, replacement po
 src/lib/backend/         demo.ts (sample data) and supabase.ts (production)
 supabase/                database schema, security rules, server functions
 ```
+
+---
+
+## Rebuilding the live demo site (`docs/`)
+
+The demo at GitHub Pages is the web version of the app in demo mode, bundled into one page:
+
+```bash
+# 1. temporarily set in app.json: plugins "expo-router" → ["expo-router", {"asyncRoutes": false}] and experiments.baseUrl → "/Coveredly"
+npx expo export --platform web --output-dir /tmp/web-demo
+# 2. undo the app.json change, then bundle and publish:
+python3 scripts/build-demo-site.py /tmp/web-demo docs/index.html /Coveredly https://dolladollabills0117.github.io/Coveredly/
+cp docs/index.html docs/404.html
+```
+
