@@ -4,5 +4,5 @@
     "strict": true
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
-  "exclude": ["node_modules", "scripts", "supabase/functions/match-policyholder", "supabase/functions/send-push", "supabase/functions/delete-account", "supabase/functions/create-checkout", "supabase/functions/stripe-webhook"]
+  "exclude": ["node_modules", "scripts", "supabase/functions/match-policyholder", "supabase/functions/send-push", "supabase/functions/delete-account", "supabase/functions/create-checkout", "supabase/functions/stripe-webhook", "supabase/functions/remove-agent"]
 }

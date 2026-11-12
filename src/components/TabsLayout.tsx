@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs } from 'expo-router';
+import { AGENT_TERMS_VERSION } from '../../supabase/functions/_shared/standing';
 import { homeFor, useAuth } from '../lib/auth';
 import { colors, fonts } from '../lib/theme';
 import type { Role } from '../lib/types';
@@ -9,7 +10,7 @@ export function RoleTabs({ role, tabs }: { role: Role; tabs: { name: string; tit
   const { user } = useAuth();
   if (user === undefined) return null;
   if (!user) return <Redirect href="/" />;
-  if (user.role !== role || (role !== 'admin' && !user.quizDone) || (role === 'agent' && user.plan?.status !== 'active')) return <Redirect href={homeFor(user)} />;
+  if (user.role !== role || (role !== 'admin' && !user.quizDone) || (role === 'agent' && (user.plan?.status !== 'active' || user.termsVersion !== AGENT_TERMS_VERSION))) return <Redirect href={homeFor(user)} />;
   return (
     <Tabs screenOptions={{
       headerShown: false,

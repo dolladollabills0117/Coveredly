@@ -11,13 +11,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fitSummary, GOOD_MATCH_THRESHOLD, rankAgents, type AgentProfile } from '../../../supabase/functions/_shared/matching';
 import { planById, type PlanId } from '../../config/plans';
+import { AGENT_TERMS_VERSION, computeStanding, latest, STANDARDS, type Standing } from '../../../supabase/functions/_shared/standing';
 import type {
   Activity, ActivityType, AdminAgent, AdminPolicyholder, AppNotification, Backend, FoundingRequest, LeadRating, LeadReport, Match,
   Message, PendingMatch, PolicyholderQuiz, Review, Role, User,
 } from '../types';
 import { AGENT_VISIBLE, OPEN_FOR_POLICYHOLDER } from '../types';
 
-type AgentRow = AgentProfile & { userId: string; email: string; license: string; phone?: string; plan?: PlanId | null; planStatus?: 'active' | 'pending' | null };
+type AgentRow = AgentProfile & { userId: string; email: string; license: string; phone?: string; plan?: PlanId | null; planStatus?: 'active' | 'pending' | 'canceled' | null;
+  warningAt?: string; warningReason?: string; removedAt?: string; termsAcceptedAt?: string; termsVersion?: string };
 interface DB {
   users: (User & { password: string })[];
   agents: AgentRow[];
@@ -33,7 +35,7 @@ interface DB {
   session: string | null;
 }
 
-const KEY = 'coveredly-demo-v4';
+const KEY = 'coveredly-demo-v5';
 const AUTO_APPROVE = false; // mirrors the sheet: admin approves every match by hand
 const now = () => new Date().toISOString();
 const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
@@ -52,15 +54,17 @@ function seed(): DB {
     mk('u-ph3', 'policyholder', 'dana@demo.com', 'Dana Lee'),
     mk('u-ph4', 'policyholder', 'chris@demo.com', 'Chris Moreno'),
     mk('u-ph5', 'policyholder', 'riley@demo.com', 'Riley Chen'),
+    mk('u-ph6', 'policyholder', 'avery@demo.com', 'Avery Brooks'),
   ];
   const base = { verified: true, licensedStates: ['New Jersey'], monthlyCap: 6 };
   const agents: AgentRow[] = [
     { ...base, id: 'u-ag1', userId: 'u-ag1', name: 'Maria Delgado', email: 'agent@demo.com', license: '1234567', phone: '(973) 555-0141',
       counties: ['Essex', 'Hudson'], contactMethod: 'Text or chat 💬', languages: ['English', 'Spanish'], explains: 'With examples and stories',
-      advises: 'I present 2 or 3 options', speed: 'Within an hour', bestLeadType: 'Ready to buy now', lines: ['Auto', 'Home, renters or condo', 'Umbrella'], matchedThisMonth: 3, plan: 'founding', planStatus: 'active' },
+      advises: 'I present 2 or 3 options', speed: 'Within an hour', bestLeadType: 'Ready to buy now', lines: ['Auto', 'Home, renters or condo', 'Umbrella'], matchedThisMonth: 3, plan: 'founding', planStatus: 'active', termsAcceptedAt: ago(30 * 24), termsVersion: AGENT_TERMS_VERSION },
     { ...base, id: 'u-ag2', userId: 'u-ag2', name: 'Jordan Park', email: 'jordan@demo.com', license: '2345678', counties: ['Bergen'],
       contactMethod: 'Phone call 📞', languages: ['English', 'Korean'], explains: 'Short and simple', advises: 'I recommend the best fit',
-      speed: 'Same day', bestLeadType: 'Renewing soon', lines: ['Auto', 'Home, renters or condo', 'Landlord / dwelling fire', 'Life'], matchedThisMonth: 1, plan: 'dialogue', planStatus: 'active' },
+      speed: 'Same day', bestLeadType: 'Renewing soon', lines: ['Auto', 'Home, renters or condo', 'Landlord / dwelling fire', 'Life'], matchedThisMonth: 1, plan: 'dialogue', planStatus: 'active', termsAcceptedAt: ago(20 * 24), termsVersion: AGENT_TERMS_VERSION,
+      warningAt: ago(9 * 24), warningReason: 'A matched lead has gone more than 3 days without any contact. Please reach out to every new lead within 3 days.' },
     { ...base, id: 'u-ag3', userId: 'u-ag3', name: 'Priya Shah', email: 'priya@demo.com', license: '3456789', verified: false, counties: ['Middlesex'],
       contactMethod: 'Email 📧', languages: ['English', 'Hindi'], explains: 'Every detail', advises: 'I lay it all out and they choose',
       speed: 'Next business day', bestLeadType: 'Still shopping around', lines: ['Life', 'Umbrella'], matchedThisMonth: 0 },
@@ -76,6 +80,7 @@ function seed(): DB {
     ph('u-ph4', 'chris@demo.com', 'Chris Moreno', { coverage: ['Auto', 'Life'], county: 'Hudson', mattersMost: 'Best price' }),
     ph('u-ph5', 'riley@demo.com', 'Riley Chen', { coverage: ['Life'], county: 'Bergen', contactMethod: 'Video or in person 🎥',
       explainStyle: 'Walk me through it with examples', decisionStyle: "Give me everything and I'll research it", timing: 'Just looking around', mattersMost: 'Best price' }),
+    ph('u-ph6', 'avery@demo.com', 'Avery Brooks', { coverage: ['Home', 'Auto'], county: 'Bergen', contactMethod: 'Phone call 📞', phone: '(201) 555-0164' }),
   ];
   const matches: DB['matches'] = [
     { id: 'm1', policyholderId: 'u-ph1', agentId: 'u-ag1', score: 92.5, matchedBy: 'Formula', status: 'active', createdAt: ago(30),
@@ -84,6 +89,7 @@ function seed(): DB {
     { id: 'm3', policyholderId: 'u-ph3', agentId: 'u-ag1', score: 71.7, matchedBy: 'Formula', status: 'established', createdAt: ago(240),
       contactedAt: ago(238), milestones: { call: ago(238), quote: ago(200), sold: ago(150), review: ago(120) }, establishedAt: ago(120) },
     { id: 'm4', policyholderId: 'u-ph4', agentId: 'u-ag2', score: 0, matchedBy: 'Formula', status: 'pending_approval', createdAt: ago(1), milestones: {} },
+    { id: 'm5', policyholderId: 'u-ph6', agentId: 'u-ag2', score: 84.4, matchedBy: 'Formula', status: 'active', createdAt: ago(6 * 24), milestones: {} },
   ];
   const seeded = {
     users, agents, policyholders, matches,
@@ -138,7 +144,24 @@ function publicUser(d: DB, u: User & { password: string }): User {
   const { password, ...rest } = u;
   if (u.role !== 'agent') return rest;
   const a = d.agents.find((x) => x.userId === u.id);
-  return { ...rest, plan: a?.plan && a.planStatus ? { id: a.plan, status: a.planStatus } : null };
+  return {
+    ...rest, removed: !!a?.removedAt, termsVersion: a?.termsVersion ?? null,
+    plan: a?.plan && (a.planStatus === 'active' || a.planStatus === 'pending') ? { id: a.plan, status: a.planStatus } : null,
+  };
+}
+function standingFor(d: DB, agentId: string): Standing {
+  const a = d.agents.find((x) => x.userId === agentId);
+  const mine = d.matches.filter((m) => m.agentId === agentId);
+  return computeStanding({
+    leads: mine.map((m) => ({
+      status: m.status, matchedAt: m.createdAt, contactedAt: m.contactedAt ?? m.milestones.call, soldAt: m.milestones.sold,
+      lastTouchAt: latest(m.contactedAt, m.milestones.call, m.milestones.quote, m.milestones.sold,
+        ...d.messages.filter((x) => x.matchId === m.id && x.senderId === agentId).map((x) => x.createdAt),
+        ...d.ratings.filter((r) => r.matchId === m.id).map((r) => r.createdAt)),
+    })),
+    reviewScores: d.reviews.filter((r) => mine.some((m) => m.id === r.matchId)).map((r) => r.ease),
+    warningAt: a?.warningAt, warningReason: a?.warningReason, removedAt: a?.removedAt,
+  });
 }
 const nameOf = (d: DB, id: string) => d.users.find((u) => u.id === id)?.fullName ?? 'Someone';
 
@@ -510,8 +533,47 @@ export const demoBackend: Backend = {
         id: a.id, fullName: a.name, email: row.email, license: row.license, verified: a.verified, matchedThisMonth: a.matchedThisMonth,
         plan: row.plan && row.planStatus === 'active' ? planById(row.plan)?.name : null,
         monthlyCap: a.monthlyCap, closed: d.matches.filter((m) => m.agentId === a.id && m.milestones.sold).length,
+        standing: standingFor(d, a.id), termsAcceptedAt: row.termsAcceptedAt ?? null, termsVersion: row.termsVersion ?? null,
       };
     });
+  },
+  async getMyStanding() {
+    const d = await load(); const u = await me();
+    return standingFor(d, u.id);
+  },
+  async acceptAgentTerms(version) {
+    const d = await load(); const u = await me();
+    const a = d.agents.find((x) => x.userId === u.id);
+    if (!a) throw new Error('Finish the agent quiz first.');
+    a.termsAcceptedAt = now(); a.termsVersion = version;
+    log(d, 'report_resolved', u.fullName, `${u.fullName} agreed to the Agent Terms (version ${version})`);
+    await save();
+  },
+  async issueWarning(agentId, reason) {
+    const d = await load();
+    const a = d.agents.find((x) => x.userId === agentId)!;
+    a.warningAt = now(); a.warningReason = reason;
+    notify(d, agentId, { kind: 'milestone', title: '30-day notice from Coveredly', body: `${reason} You have ${STANDARDS.warningDays} days to improve. See Profile → Your standing.` });
+    log(d, 'reported', 'Admin', `You sent ${a.name} a ${STANDARDS.warningDays}-day notice: ${reason}`);
+    await save();
+  },
+  async clearWarning(agentId) {
+    const d = await load();
+    const a = d.agents.find((x) => x.userId === agentId)!;
+    a.warningAt = undefined; a.warningReason = undefined;
+    notify(d, agentId, { kind: 'milestone', title: 'Notice cleared 🧡', body: "Thanks for turning things around. You're in good standing." });
+    log(d, 'report_resolved', 'Admin', `You cleared ${a.name}'s notice`);
+    await save();
+  },
+  async removeAgent(agentId) {
+    const d = await load();
+    const a = d.agents.find((x) => x.userId === agentId)!;
+    if (!a.warningAt || Date.now() - new Date(a.warningAt).getTime() < STANDARDS.warningDays * 86400_000)
+      throw new Error(`An agent can be removed only after their ${STANDARDS.warningDays}-day notice has run out.`);
+    a.removedAt = now(); a.planStatus = 'canceled';
+    notify(d, agentId, { kind: 'milestone', title: 'Your Coveredly membership has ended', body: 'Your subscription has been canceled and you will not be charged again.' });
+    log(d, 'reported', 'Admin', `You removed ${a.name} from Coveredly`);
+    await save();
   },
   async setAgentVerified(agentId, verified) {
     const d = await load();
@@ -523,6 +585,8 @@ export const demoBackend: Backend = {
   async startCheckout(planId) {
     const d = await load(); const u = await me();
     const a = d.agents.find((x) => x.userId === u.id)!;
+    if (a.removedAt) throw new Error('This account has been removed from Coveredly.');
+    if (a.termsVersion !== AGENT_TERMS_VERSION) throw new Error('Please agree to the Agent Terms first.');
     if (planId === 'founding' && !d.founding.some((f) => f.agentId === u.id && f.status === 'redeemed'))
       throw new Error('Validate your founding agent code first.');
     const plan = planById(planId)!;
@@ -561,7 +625,7 @@ export const demoBackend: Backend = {
     const f = d.founding.find((x) => x.id === id)!;
     f.code = f.code ?? 'CF-' + Math.random().toString(36).slice(2, 8).toUpperCase();
     f.status = 'approved';
-    notify(d, f.agentId, { kind: 'milestone', title: "You're a founding agent 🧡", body: `Your code is ${f.code}. Enter it on the plan screen to lock in $39/month for life.` });
+    notify(d, f.agentId, { kind: 'milestone', title: "You're a founding agent 🧡", body: `Your code is ${f.code}. Enter it on the plan screen to lock in $39/month for life, as long as you meet our Agent Standards.` });
     log(d, 'match_approved', 'Admin', `You approved ${f.agentName} as a founding agent (code ${f.code})`);
     await save();
     return f.code;

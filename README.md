@@ -12,6 +12,8 @@ A match becomes **Established** after these four milestones: first phone call �
 
 **Agent plans:** after the quiz, agents choose **Rapport** ($99, 6 leads/mo), **Dialogue** ($189, 12) or **Fluency** ($349, 24). Founding agents tap **I am a founding agent**. You get notified, approve them in Admin → Agents, and they receive a code. Once they validate the code in the app, they unlock **$39/mo for 6 leads, for life**. Agents are only matched while they're verified *and* have an active plan, and the plan's lead count is their monthly cap.
 
+**Agent Standards:** leads are capped, so spots go to agents who show up for their clients. Each agent's Profile has a **Your standing** card (first contact within 3 days, follow-up, reviews, close rate, activity). From Admin → Agents you can send a **30-day notice**, clear it, or remove the agent once the 30 days are up (this cancels their subscription). Agents must tick **I agree to the Agent Terms, Agent Standards and Privacy Policy** before paying. The app saves the exact terms version and server time as proof, and asks agents to agree again whenever the terms change.
+
 **Also:** polka-dot background (toggle in Profile, saved per device), and a Privacy Policy page reachable from welcome, sign-up, the plan screen and both profiles. The policy text is in `src/config/privacyPolicy.ts`.
 
 Built with Expo (React Native) + Supabase. One codebase ships to both the App Store and Google Play.
@@ -57,6 +59,7 @@ Matching stays **manual-approval** like your sheet: the formula suggests, and yo
 ---
 
 ## Things to fill in
+0. **Agent Terms of Service** (`src/config/agentTerms.ts`) and **Agent Standards** (`src/config/agentStandards.ts`): drafts written to protect you until your NJ attorney reviews them. If you change the terms, bump `AGENT_TERMS_VERSION` in `supabase/functions/_shared/standing.ts` and every agent is asked to agree again. The standards targets (3-day first contact, 75% follow-up, 3/5 reviews, 15% close rate, 14 days active, 30-day notice) are in `STANDARDS` in the same file.
 0. **Privacy Policy:** `src/config/privacyPolicy.ts`. Have your NJ attorney review it, then publish the same text at getcoveredly.com/privacy (the stores require a public URL).
 
 1. **Lead replacement policy wording:** `src/config/leadReplacementPolicy.ts`. Paste the exact text and reasons from the agents page of getcoveredly.com.
@@ -97,6 +100,7 @@ Matching stays **manual-approval** like your sheet: the formula suggests, and yo
    ```
 3. Stripe → Developers → Webhooks: add the `stripe-webhook` function URL, with events `checkout.session.completed`, `customer.subscription.updated` and `customer.subscription.deleted`. Then `supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...`
 4. Run `supabase/migrations/0002_plans_and_founding.sql` in the SQL Editor (after 0001).
+5. Run `0003_match_quality_queue.sql` and `0004_agent_standards_terms.sql` too, then deploy `supabase functions deploy remove-agent` (it cancels the Stripe subscription when you remove an agent).
 
 > **Apple / Google payment rules:** the app sends agents to Stripe's secure web checkout. US App Store and Google Play rules currently allow linking out to web payments for US users, and lead subscriptions are a B2B service. Confirm this when you submit. If a reviewer pushes back, the fallback is in-app purchase subscriptions (Apple/Google take a 15–30% cut).
 

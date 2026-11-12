@@ -1,5 +1,7 @@
 import type { AgentProfile, FitItem, PolicyholderProfile } from '../../supabase/functions/_shared/matching';
 import type { PlanId } from '../config/plans';
+import type { Standing } from '../../supabase/functions/_shared/standing';
+export type { Standing };
 
 export type Role = 'agent' | 'policyholder' | 'admin';
 
@@ -12,6 +14,10 @@ export interface User {
   quizDone: boolean;
   /** Agents only: their subscription. Agents without an active plan are sent to the plan screen. */
   plan?: { id: PlanId; status: 'active' | 'pending' } | null;
+  /** Agents only: removed from Coveredly (can't subscribe again). */
+  removed?: boolean;
+  /** Agents only: version of the Agent Terms they agreed to, if any. */
+  termsVersion?: string | null;
 }
 
 export interface FoundingRequest {
@@ -162,6 +168,9 @@ export interface AdminAgent {
   monthlyCap: number;
   closed: number;
   plan?: string | null; // plan name + status, e.g. "Dialogue"
+  standing: Standing;
+  termsAcceptedAt?: string | null;
+  termsVersion?: string | null;
 }
 
 /** Everything the screens need. Implemented by the demo store and by Supabase. */
@@ -217,6 +226,15 @@ export interface Backend {
   redeemFoundingCode(code: string): Promise<void>;
   listFoundingRequests(): Promise<FoundingRequest[]>;
   approveFounding(requestId: string): Promise<string>; // returns the code
+
+  // Agent standards & terms
+  getMyStanding(): Promise<Standing>;
+  /** Records that the signed-in agent agreed to this version of the Agent Terms (server time). */
+  acceptAgentTerms(version: string): Promise<void>;
+  issueWarning(agentId: string, reason: string): Promise<void>;
+  clearWarning(agentId: string): Promise<void>;
+  /** Only allowed once the 30-day notice has run out. Cancels the subscription. */
+  removeAgent(agentId: string): Promise<void>;
 
   /** Fires whenever data changes (realtime in Supabase, local in demo). Returns unsubscribe. */
   subscribe(cb: () => void): () => void;

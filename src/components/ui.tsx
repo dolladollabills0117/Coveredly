@@ -131,6 +131,20 @@ export function Empty({ icon, title, body, children }: { icon: keyof typeof Ioni
   );
 }
 
+/** Checkbox with a tappable label (used for agreeing to terms). */
+export function Checkbox({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode }) {
+  return (
+    <Pressable accessibilityRole="checkbox" accessibilityState={{ checked }} onPress={() => { tap(); onChange(!checked); }}
+      style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }} hitSlop={6}>
+      <View style={{ width: 24, height: 24, borderRadius: 7, borderWidth: 2, borderColor: checked ? colors.orange : colors.inkSoft,
+        backgroundColor: checked ? colors.orange : colors.white, alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
+        {checked && <Ionicons name="checkmark" size={16} color={colors.white} />}
+      </View>
+      <Text style={[s.small, { flex: 1, color: colors.ink, fontSize: 14, lineHeight: 20 }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 /** Brand-colored on/off switch (same look on iOS, Android and web). */
 export function Toggle({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
   return <Switch value={value} onValueChange={(v) => { tap(); onValueChange(v); }} trackColor={{ true: colors.orange, false: colors.line }}

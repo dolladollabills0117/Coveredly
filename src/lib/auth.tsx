@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { api } from './backend';
+import { AGENT_TERMS_VERSION } from '../../supabase/functions/_shared/standing';
 import type { Role, User } from './types';
 
 interface AuthCtx {
@@ -35,5 +36,6 @@ export function homeFor(u: User) {
   if (u.role === 'admin') return '/admin' as const;
   if (!u.quizDone) return u.role === 'agent' ? ('/quiz/agent' as const) : ('/quiz/policyholder' as const);
   if (u.role === 'agent' && u.plan?.status !== 'active') return '/plan' as const;
+  if (u.role === 'agent' && u.termsVersion !== AGENT_TERMS_VERSION) return '/terms?accept=1' as const;
   return u.role === 'agent' ? ('/agent' as const) : ('/policyholder' as const);
 }

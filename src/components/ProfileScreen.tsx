@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Alert, Platform, Pressable, View } from 'react-native';
 import { planById } from '../config/plans';
+import { StandingCard } from './StandingCard';
 import { usePrefs } from '../lib/prefs';
 import { useAuth } from '../lib/auth';
 import { api, isDemo } from '../lib/backend';
@@ -15,6 +16,7 @@ export function ProfileScreen() {
   const { dots, setDots } = usePrefs();
   const plan = planById(user?.plan?.id);
   const { data: quiz } = useLive(() => api.getMyQuiz());
+  const { data: standing } = useLive(() => (user?.role === 'agent' ? api.getMyStanding() : Promise.resolve(null)), [user?.role]);
   const agent = user?.role === 'agent';
   const entries = quiz ? Object.entries(quiz).filter(([k, v]) =>
     !['fullName', 'userId', 'id', 'email', 'name', 'verified', 'matchedThisMonth', 'monthlyCap', 'licensedStates', 'license', 'phone', 'plan', 'planStatus', 'subscribed'].includes(k) && v && (!Array.isArray(v) || v.length)) : [];
@@ -35,9 +37,10 @@ export function ProfileScreen() {
         <Card style={{ marginTop: space(6), backgroundColor: colors.ink }}>
           <Small style={{ color: '#BDB3A9' }}>Your plan</Small>
           <H3 style={{ color: colors.white, marginTop: 2 }}>{plan.name} · ${plan.price}/month</H3>
-          <Small style={{ color: '#E9DFD6', marginTop: 4 }}>Up to {plan.leads} matched leads a month{plan.id === 'founding' ? ' · locked in for life' : ''}. To change or cancel, email hello@getcoveredly.com.</Small>
+          <Small style={{ color: '#E9DFD6', marginTop: 4 }}>Up to {plan.leads} matched leads a month{plan.id === 'founding' ? ', locked in for life while you meet our Agent Standards' : ''}. To change or cancel, email hello@getcoveredly.com.</Small>
         </Card>
       )}
+      {agent && standing && <View style={{ marginTop: space(4) }}><StandingCard standing={standing} /></View>}
       <Card style={{ marginTop: space(4) }}>
         <Row style={{ justifyContent: 'space-between' }}>
           <View style={{ flex: 1 }}>
@@ -65,11 +68,16 @@ export function ProfileScreen() {
             ? 'Your license number is only used to verify you. Your contact info is shared only with policyholders you are matched with.'
             : "Your contact info is shared only with the one agent you're matched with. We don't sell your info, and we don't spam."}</Small></Row>
       </Card>
-      <Pressable onPress={() => router.push('/privacy')}>
-        <Card style={{ marginTop: space(4) }}>
-          <Row><Ionicons name="document-text-outline" size={20} color={colors.orange} /><Body style={{ flex: 1, fontFamily: fonts.semibold }}>Privacy Policy</Body><Ionicons name="chevron-forward" size={18} color={colors.inkSoft} /></Row>
-        </Card>
-      </Pressable>
+      <Card style={{ marginTop: space(4), paddingVertical: space(2) }}>
+        {[
+          ...(agent ? [['ribbon-outline', 'Agent Standards', '/standards'], ['reader-outline', 'Agent Terms of Service', '/terms']] : []),
+          ['document-text-outline', 'Privacy Policy', '/privacy'],
+        ].map(([icon, label, href], i) => (
+          <Pressable key={href} onPress={() => router.push(href as any)} style={{ paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderTopColor: colors.line }}>
+            <Row><Ionicons name={icon as any} size={20} color={colors.orange} /><Body style={{ flex: 1, fontFamily: fonts.semibold }}>{label}</Body><Ionicons name="chevron-forward" size={18} color={colors.inkSoft} /></Row>
+          </Pressable>
+        ))}
+      </Card>
       <Button title="Sign out" variant="outline" style={{ marginTop: space(6) }} onPress={async () => { await signOut(); router.replace('/'); }} />
       <Button title="Delete my account" variant="ghost" style={{ marginTop: 8 }} onPress={async () => {
         const really = Platform.OS === 'web'

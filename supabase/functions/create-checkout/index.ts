@@ -2,6 +2,7 @@
 // Secrets: STRIPE_SECRET_KEY, STRIPE_PRICE_RAPPORT, STRIPE_PRICE_DIALOGUE, STRIPE_PRICE_FLUENCY, STRIPE_PRICE_FOUNDING,
 //          CHECKOUT_RETURN_URL (e.g. https://getcoveredly.com/agents/welcome)
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { AGENT_TERMS_VERSION } from '../_shared/standing.ts';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info' };
 const PRICES: Record<string, string | undefined> = {
@@ -26,8 +27,10 @@ Deno.serve(async (req) => {
     const { data: f } = await admin.from('founding_requests').select('status').eq('agent_id', user.id).maybeSingle();
     if (f?.status !== 'redeemed') return json({ error: 'Validate your founding agent code first.' }, 403);
   }
-  const { data: agent } = await admin.from('agents').select('stripe_customer_id').eq('user_id', user.id).single();
+  const { data: agent } = await admin.from('agents').select('stripe_customer_id, removed_at, terms_version').eq('user_id', user.id).single();
   if (!agent) return json({ error: 'Finish the agent quiz first.' }, 400);
+  if (agent.removed_at) return json({ error: 'This account has been removed from Coveredly.' }, 403);
+  if (agent.terms_version !== AGENT_TERMS_VERSION) return json({ error: 'Please agree to the Agent Terms first.' }, 403);
 
   const back = Deno.env.get('CHECKOUT_RETURN_URL') ?? 'https://getcoveredly.com';
   const form = new URLSearchParams({

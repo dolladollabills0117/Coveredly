@@ -18,7 +18,7 @@ export const PLANS: Plan[] = [
 ];
 
 export const FOUNDING_PLAN: Plan = {
-  id: 'founding', name: 'Founding Agent', price: 39, leads: 6, blurb: 'Locked in for life for our founding agents.', badge: 'Invite only',
+  id: 'founding', name: 'Founding Agent', price: 39, leads: 6, blurb: 'Locked in for life for our founding agents, as long as you meet our Agent Standards.', badge: 'Invite only',
 };
 
 export const planById = (id?: string | null) => [...PLANS, FOUNDING_PLAN].find((p) => p.id === id);

@@ -17,6 +17,7 @@ const bucket = (m: Match): (typeof FILTERS)[number] =>
 export default function Leads() {
   const { user } = useAuth();
   const { data: leads } = useLive(() => api.listMyMatches());
+  const { data: standing } = useLive(() => api.getMyStanding());
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('All');
   const list = (leads ?? []).filter((m) => filter === 'All' || bucket(m) === filter);
   const count = (f: (typeof FILTERS)[number]) => (leads ?? []).filter((m) => bucket(m) === f).length;
@@ -26,6 +27,21 @@ export default function Leads() {
     <Screen>
       <Eyebrow>Good to see you</Eyebrow>
       <H1 style={{ marginTop: 4 }}>{user?.fullName?.split(' ')[0]}'s leads</H1>
+
+      {(standing?.status === 'warning' || standing?.status === 'attention') && (
+        <Card onPress={() => router.push('/agent/profile')} style={{ marginTop: space(4), backgroundColor: standing.status === 'warning' ? colors.redSoft : colors.orangeSoft, shadowOpacity: 0, padding: space(4) }}>
+          <Row>
+            <Ionicons name={standing.status === 'warning' ? 'time' : 'alert-circle'} size={22} color={standing.status === 'warning' ? colors.red : colors.orange} />
+            <View style={{ flex: 1 }}>
+              <Body style={{ fontFamily: fonts.semibold }}>
+                {standing.status === 'warning' ? `30-day notice: ${standing.warningDaysLeft} days left to improve` : 'A few things need your attention'}
+              </Body>
+              <Small style={{ color: colors.ink }}>Tap to see your standing</Small>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.inkSoft} />
+          </Row>
+        </Card>
+      )}
 
       <View style={st.stats}>
         {[

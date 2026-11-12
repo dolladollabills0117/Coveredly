@@ -5,6 +5,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
+import { computeStanding, latest, type StandingLead } from '../../../supabase/functions/_shared/standing';
 import type { FoundingRequest, AgentQuiz, AppNotification, Backend, Match, MilestoneKey, PolicyholderQuiz, Role, User } from '../types';
 
 let sb: SupabaseClient;
@@ -34,8 +35,10 @@ async function profile(id: string): Promise<User | null> {
   if (!data) return null;
   const u: User = { id: data.id, role: data.role, email: data.email, fullName: data.full_name, phone: data.phone ?? undefined, quizDone: data.quiz_done };
   if (u.role === 'agent') {
-    const { data: a } = await s.from('agents').select('plan, plan_status').eq('user_id', id).maybeSingle();
+    const { data: a } = await s.from('agents').select('plan, plan_status, removed_at, terms_version').eq('user_id', id).maybeSingle();
     u.plan = a?.plan && (a.plan_status === 'active' || a.plan_status === 'pending') ? { id: a.plan, status: a.plan_status } : null;
+    u.removed = !!a?.removed_at;
+    u.termsVersion = a?.terms_version ?? null;
   }
   return u;
 }
@@ -79,6 +82,30 @@ async function invokeMatch(body: Record<string, unknown>) {
   const { data, error } = await supabaseClient().functions.invoke('match-policyholder', { body });
   if (error || data?.error) throw new Error(data?.error ?? error?.message);
   return data;
+}
+
+/** Builds each agent's standing from their matches, ratings, messages and reviews. */
+async function standingsFor(agentIds: string[]) {
+  const s = supabaseClient();
+  const [agents, matches, ratings, messages, reviews] = await Promise.all([
+    s.from('agents').select('user_id, warning_at, warning_reason, removed_at').in('user_id', agentIds),
+    s.from('matches').select('id, agent_id, status, approved_at, created_at, contacted_at, m_call, m_quote, m_sold').in('agent_id', agentIds),
+    s.from('lead_ratings').select('match_id, created_at').in('agent_id', agentIds),
+    s.from('messages').select('match_id, sender_id, created_at').in('sender_id', agentIds),
+    s.from('reviews').select('match_id, ease'),
+  ]);
+  return new Map(agentIds.map((id) => {
+    const a: any = (agents.data ?? []).find((x: any) => x.user_id === id);
+    const mine = (matches.data ?? []).filter((m: any) => m.agent_id === id);
+    const leads: StandingLead[] = mine.map((m: any) => ({
+      status: m.status, matchedAt: m.approved_at ?? m.created_at, contactedAt: m.contacted_at ?? m.m_call ?? undefined, soldAt: m.m_sold ?? undefined,
+      lastTouchAt: latest(m.contacted_at, m.m_call, m.m_quote, m.m_sold,
+        ...(messages.data ?? []).filter((x: any) => x.match_id === m.id && x.sender_id === id).map((x: any) => x.created_at),
+        ...(ratings.data ?? []).filter((r: any) => r.match_id === m.id).map((r: any) => r.created_at)),
+    }));
+    const reviewScores = (reviews.data ?? []).filter((r: any) => mine.some((m: any) => m.id === r.match_id)).map((r: any) => r.ease);
+    return [id, computeStanding({ leads, reviewScores, warningAt: a?.warning_at ?? undefined, warningReason: a?.warning_reason ?? undefined, removedAt: a?.removed_at ?? undefined })];
+  }));
 }
 
 export const supabaseBackend: Backend = {
@@ -244,14 +271,27 @@ export const supabaseBackend: Backend = {
       s.from('agents').select('*'), s.from('profiles').select('id, full_name, email').eq('role', 'agent'), s.from('matches').select('agent_id, status, m_sold, approved_at'),
     ]);
     const month = new Date().toISOString().slice(0, 7);
+    const standings = await standingsFor((agents.data ?? []).map((a: any) => a.user_id));
     return (agents.data ?? []).map((a: any) => {
       const p = (profiles.data ?? []).find((x: any) => x.id === a.user_id);
       const mine = (matches.data ?? []).filter((m: any) => m.agent_id === a.user_id);
       return { id: a.user_id, fullName: p?.full_name ?? '', email: p?.email ?? '', license: a.license, verified: a.verified, monthlyCap: a.monthly_cap,
         plan: a.plan_status === 'active' ? a.plan : a.plan_status ? `${a.plan} (${a.plan_status})` : null,
         matchedThisMonth: mine.filter((m: any) => m.approved_at?.startsWith(month) && m.status !== 'replaced').length,
-        closed: mine.filter((m: any) => m.m_sold).length };
+        closed: mine.filter((m: any) => m.m_sold).length,
+        standing: standings.get(a.user_id)!, termsAcceptedAt: a.terms_accepted_at, termsVersion: a.terms_version };
     });
+  },
+  async getMyStanding() {
+    const id = await uidOrThrow();
+    return (await standingsFor([id])).get(id)!;
+  },
+  async acceptAgentTerms(version) { ok(await supabaseClient().rpc('accept_agent_terms', { p_version: version })); },
+  async issueWarning(agentId, reason) { ok(await supabaseClient().rpc('issue_agent_warning', { p_agent: agentId, p_reason: reason })); },
+  async clearWarning(agentId) { ok(await supabaseClient().rpc('clear_agent_warning', { p_agent: agentId })); },
+  async removeAgent(agentId) {
+    const { data, error } = await supabaseClient().functions.invoke('remove-agent', { body: { agentId } });
+    if (error || data?.error) throw new Error(data?.error ?? error?.message);
   },
   async setAgentVerified(id, verified) {
     ok(await supabaseClient().from('agents').update({ verified }).eq('user_id', id));
